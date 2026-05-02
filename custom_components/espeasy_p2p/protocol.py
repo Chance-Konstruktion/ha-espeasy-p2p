@@ -90,8 +90,15 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         if len(data) < 2 or data[0] != PACKET_HEADER:
+            _LOGGER.debug(
+                "Ignoring non-C013 UDP packet from %s (len=%d, first=%r)",
+                addr, len(data), data[:4],
+            )
             return
         ptype = data[1]
+        _LOGGER.debug(
+            "RX C013 type=%d from %s len=%d", ptype, addr[0], len(data)
+        )
         try:
             if ptype == PACKET_TYPE_INFO:
                 self._handle_info(data, addr[0])
@@ -99,6 +106,8 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
                 self._handle_sensor_config(data)
             elif ptype == PACKET_TYPE_SENSOR_DATA:
                 self._handle_sensor_data(data)
+            else:
+                _LOGGER.debug("Unhandled C013 packet type %d from %s", ptype, addr)
         except (struct.error, ValueError) as err:
             _LOGGER.debug("Bad ESPEasy P2P packet from %s: %s", addr, err)
 
@@ -202,6 +211,20 @@ def build_info_packet(
         node_type & 0xFF,
         web_port & 0xFFFF,
     )
+
+
+def detect_local_ip() -> str:
+    """Best-effort detection of the local LAN IP that broadcasts will originate from."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # The address does not need to be reachable; this just forces the
+        # kernel to pick the outbound interface and tells us its address.
+        sock.connect(("10.255.255.255", 1))
+        return sock.getsockname()[0]
+    except OSError:
+        return "0.0.0.0"
+    finally:
+        sock.close()
 
 
 async def create_listener(
