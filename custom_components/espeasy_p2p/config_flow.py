@@ -8,7 +8,15 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
-from .const import CONF_PORT, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_NAME,
+    CONF_PORT,
+    CONF_UNIT,
+    DEFAULT_NAME,
+    DEFAULT_PORT,
+    DEFAULT_UNIT,
+    DOMAIN,
+)
 
 
 class ESPEasyP2PConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -27,10 +35,22 @@ class ESPEasyP2PConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
                 title="ESPEasy P2P",
-                data={CONF_PORT: user_input[CONF_PORT]},
+                data={
+                    CONF_PORT: user_input[CONF_PORT],
+                    CONF_UNIT: user_input[CONF_UNIT],
+                    CONF_NAME: user_input[CONF_NAME],
+                },
             )
 
         schema = vol.Schema(
-            {vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(int, vol.Range(min=1, max=65535))}
+            {
+                vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
+                    int, vol.Range(min=1, max=65535)
+                ),
+                vol.Required(CONF_UNIT, default=DEFAULT_UNIT): vol.All(
+                    int, vol.Range(min=1, max=255)
+                ),
+                vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+            }
         )
         return self.async_show_form(step_id="user", data_schema=schema)

@@ -6,9 +6,13 @@ DOMAIN = "espeasy_p2p"
 
 CONF_PORT = "port"
 CONF_UNIT = "unit"
+CONF_NAME = "name"
 
 DEFAULT_PORT = 8266
-DEFAULT_UNIT = 0
+DEFAULT_UNIT = 250
+DEFAULT_NAME = "Home Assistant"
+
+SERVICE_SCAN = "scan"
 
 PACKET_HEADER = 255
 PACKET_TYPE_INFO = 1

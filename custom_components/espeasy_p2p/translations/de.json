@@ -3,14 +3,22 @@
     "step": {
       "user": {
         "title": "ESPEasy P2P",
-        "description": "Empfängt ESPEasy C013 Broadcasts im lokalen Netzwerk.",
+        "description": "Empfängt ESPEasy C013 Broadcasts und sucht aktiv nach Peers.",
         "data": {
-          "port": "UDP-Port"
+          "port": "UDP-Port",
+          "unit": "Unit-Nummer von Home Assistant",
+          "name": "Peer-Name von Home Assistant"
         }
       }
     },
     "abort": {
       "single_instance_allowed": "Es kann nur ein ESPEasy P2P Listener konfiguriert werden."
+    }
+  },
+  "services": {
+    "scan": {
+      "name": "Knoten suchen",
+      "description": "Sendet ein Node-Info-Paket per Broadcast, damit alle ESPEasy-Knoten sich sofort melden."
     }
   }
 }

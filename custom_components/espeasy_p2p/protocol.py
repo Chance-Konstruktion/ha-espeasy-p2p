@@ -175,6 +175,35 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
         )
 
 
+def build_info_packet(
+    unit: int, name: str, ip: str, web_port: int, build: int = 1, node_type: int = 5
+) -> bytes:
+    """Build a Type-1 (Node Info) packet announcing HA as a virtual peer.
+
+    Sending this as a broadcast triggers ESPEasy nodes to immediately
+    announce themselves and their tasks back, instead of waiting for the
+    next periodic broadcast (~30 s).
+    """
+    try:
+        ip_bytes = bytes(int(p) for p in ip.split("."))
+        if len(ip_bytes) != 4:
+            ip_bytes = b"\x00\x00\x00\x00"
+    except ValueError:
+        ip_bytes = b"\x00\x00\x00\x00"
+    name_bytes = name.encode("utf-8", errors="replace")[:25].ljust(25, b"\x00")
+    return INFO_STRUCT.pack(
+        PACKET_HEADER,
+        PACKET_TYPE_INFO,
+        0, 0, 0, 0, 0, 0,  # MAC unknown - zeroed
+        ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3],
+        unit & 0xFF,
+        build & 0xFFFF,
+        name_bytes,
+        node_type & 0xFF,
+        web_port & 0xFFFF,
+    )
+
+
 async def create_listener(
     loop: asyncio.AbstractEventLoop,
     port: int,
