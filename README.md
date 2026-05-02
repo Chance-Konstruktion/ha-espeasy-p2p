@@ -10,6 +10,10 @@ each task value as a Home Assistant sensor.
 
 - Pure local push, no cloud, no polling
 - Auto-discovers nodes and tasks as they announce themselves
+- **Active scan**: HA broadcasts itself as a peer at startup and every 30 s,
+  which triggers all reachable ESPEasy nodes to announce themselves
+  immediately instead of waiting up to 30 s. Also exposed as a manual
+  `espeasy_p2p.scan` service.
 - Creates one sensor entity per task value (up to four per task)
 - Groups entities by ESPEasy unit as a Home Assistant device
 
@@ -19,8 +23,9 @@ each task value as a Home Assistant sensor.
    category **Integration**.
 2. Install **ESPEasy P2P** and restart Home Assistant.
 3. *Settings → Devices & Services → Add Integration → ESPEasy P2P*.
-4. Confirm the UDP port (default `8266`). The integration will start listening
-   immediately; entities appear as nodes broadcast their tasks.
+4. Confirm the UDP port (default `8266`), pick a free unit number for HA
+   (default `250`) and a peer name. The integration will broadcast a scan
+   immediately; entities appear as nodes respond.
 
 ## Notes
 

@@ -1,0 +1,6 @@
+scan:
+  name: Scan for nodes
+  description: >
+    Broadcast a node-info packet so all reachable ESPEasy nodes immediately
+    announce themselves and their tasks instead of waiting for the next
+    periodic broadcast.

@@ -3,14 +3,22 @@
     "step": {
       "user": {
         "title": "ESPEasy P2P",
-        "description": "Listen for ESPEasy C013 broadcasts on the local network.",
+        "description": "Listen for ESPEasy C013 broadcasts and actively scan for peers.",
         "data": {
-          "port": "UDP port"
+          "port": "UDP port",
+          "unit": "Home Assistant unit number",
+          "name": "Home Assistant peer name"
         }
       }
     },
     "abort": {
       "single_instance_allowed": "Only one ESPEasy P2P listener can be configured."
+    }
+  },
+  "services": {
+    "scan": {
+      "name": "Scan for nodes",
+      "description": "Broadcast a node-info packet so all reachable ESPEasy nodes immediately announce themselves."
     }
   }
 }
