@@ -22,6 +22,7 @@ from .protocol import (
     TaskValues,
     build_info_packet,
     create_listener,
+    detect_local_ip,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class ESPEasyP2PCoordinator:
         self.port = port
         self.unit = unit
         self.name = name
+        self.local_ip = "0.0.0.0"
         self.nodes: dict[int, NodeInfo] = {}
         self.tasks: dict[tuple[int, int], TaskConfig] = {}
         self.values: dict[tuple[int, int], list[float]] = {}
@@ -51,6 +53,7 @@ class ESPEasyP2PCoordinator:
 
     async def async_start(self) -> None:
         loop = self.hass.loop
+        self.local_ip = await loop.run_in_executor(None, detect_local_ip)
         self._transport, _ = await create_listener(
             loop,
             self.port,
@@ -60,7 +63,10 @@ class ESPEasyP2PCoordinator:
                 on_values=self._on_values,
             ),
         )
-        _LOGGER.info("ESPEasy P2P listener bound on UDP port %s", self.port)
+        _LOGGER.info(
+            "ESPEasy P2P listener bound on UDP %s (peer unit=%d name=%s ip=%s)",
+            self.port, self.unit, self.name, self.local_ip,
+        )
         # Kick off active discovery and start periodic announce loop.
         self.async_scan()
         self._announce_task = self.hass.loop.create_task(self._announce_loop())
@@ -73,25 +79,35 @@ class ESPEasyP2PCoordinator:
             self._transport.close()
             self._transport = None
 
+    def _build_announce(self) -> bytes:
+        # Node type 5 = RPiEasy — accepted as a valid peer by all known
+        # ESPEasy/RPiEasy firmware versions.
+        return build_info_packet(
+            unit=self.unit,
+            name=self.name,
+            ip=self.local_ip,
+            web_port=8123,
+        )
+
     @callback
     def async_scan(self) -> None:
         """Broadcast a node-info packet so all peers respond immediately."""
         if self._transport is None:
             return
-        # Source IP is filled in by the receiver from the UDP packet itself,
-        # so we can leave it zero. Node type 5 = RPiEasy, which the reference
-        # implementation accepts as a valid peer.
-        packet = build_info_packet(
-            unit=self.unit,
-            name=self.name,
-            ip="0.0.0.0",
-            web_port=8123,
-        )
+        packet = self._build_announce()
         try:
             self._transport.sendto(packet, ("255.255.255.255", self.port))
-            _LOGGER.debug("Sent ESPEasy P2P scan broadcast on port %s", self.port)
+            _LOGGER.debug("Sent C013 scan broadcast on port %s", self.port)
         except OSError as err:
             _LOGGER.warning("Failed to broadcast scan: %s", err)
+        # Also unicast to known peers so they re-send their task config.
+        for node in self.nodes.values():
+            if not node.ip or node.ip == "0.0.0.0":
+                continue
+            try:
+                self._transport.sendto(packet, (node.ip, self.port))
+            except OSError as err:
+                _LOGGER.debug("Unicast scan to %s failed: %s", node.ip, err)
 
     async def _announce_loop(self) -> None:
         try:
@@ -112,8 +128,18 @@ class ESPEasyP2PCoordinator:
         existing = self.nodes.get(node.unit)
         self.nodes[node.unit] = node
         if existing is None:
-            _LOGGER.debug("Discovered ESPEasy node %s (%s)", node.unit, node.name)
+            _LOGGER.info(
+                "Discovered ESPEasy node unit=%d name=%s ip=%s build=%d",
+                node.unit, node.name, node.ip, node.build,
+            )
             async_dispatcher_send(self.hass, self._signal(SIGNAL_NODE_DISCOVERED), node)
+            # Unicast a hello back so the node knows we exist and re-sends
+            # its task configuration to us.
+            if self._transport is not None and node.ip and node.ip != "0.0.0.0":
+                try:
+                    self._transport.sendto(self._build_announce(), (node.ip, self.port))
+                except OSError as err:
+                    _LOGGER.debug("Unicast hello to %s failed: %s", node.ip, err)
 
     @callback
     def _on_task(self, task: TaskConfig) -> None:
@@ -121,11 +147,12 @@ class ESPEasyP2PCoordinator:
         is_new = key not in self.tasks
         self.tasks[key] = task
         if is_new:
-            _LOGGER.debug(
-                "Discovered task %s on unit %s: %s",
+            _LOGGER.info(
+                "Discovered task %d on unit %d: %s (values=%s)",
                 task.task_index,
                 task.src_unit,
                 task.task_name,
+                task.value_names,
             )
             async_dispatcher_send(self.hass, self._signal(SIGNAL_TASK_DISCOVERED), task)
 
