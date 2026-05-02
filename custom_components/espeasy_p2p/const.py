@@ -33,6 +33,20 @@ NODE_TYPE_NAMES = {
     17: "ESP Easy-M",
     33: "ESP Easy32",
     65: "Arduino Easy",
+    66: "Home Assistant",
     81: "Nano Easy",
     97: "ATmega LoRa",
 }
+
+# Node-type byte we use when announcing HA on the C013 mesh. The C013
+# protocol does not officially define a Home Assistant type, so we pick an
+# unused slot; depending on firmware version, peer UIs will display either
+# "Home Assistant" (if mapped) or the raw numeric value.
+HA_NODE_TYPE = 66
+
+# Build number HA reports on the wire. The C013 build field is 16 bits
+# (max 65535), so we encode it as YYMMDD without the century prefix:
+# 2026-05-02 -> 26502.
+HA_BUILD = 26502
+# Human-readable version shown in HA's own device info / log lines.
+HA_VERSION = "20260502"

@@ -11,6 +11,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ANNOUNCE_INTERVAL,
+    HA_BUILD,
+    HA_NODE_TYPE,
+    HA_VERSION,
     SIGNAL_NODE_DISCOVERED,
     SIGNAL_TASK_DISCOVERED,
     SIGNAL_VALUE_UPDATED,
@@ -64,8 +67,8 @@ class ESPEasyP2PCoordinator:
             ),
         )
         _LOGGER.info(
-            "ESPEasy P2P listener bound on UDP %s (peer unit=%d name=%s ip=%s)",
-            self.port, self.unit, self.name, self.local_ip,
+            "ESPEasy P2P listener bound on UDP %s (peer unit=%d name=%s ip=%s version=%s)",
+            self.port, self.unit, self.name, self.local_ip, HA_VERSION,
         )
         # Kick off active discovery and start periodic announce loop.
         self.async_scan()
@@ -80,13 +83,13 @@ class ESPEasyP2PCoordinator:
             self._transport = None
 
     def _build_announce(self) -> bytes:
-        # Node type 5 = RPiEasy — accepted as a valid peer by all known
-        # ESPEasy/RPiEasy firmware versions.
         return build_info_packet(
             unit=self.unit,
             name=self.name,
             ip=self.local_ip,
             web_port=8123,
+            build=HA_BUILD,
+            node_type=HA_NODE_TYPE,
         )
 
     @callback
