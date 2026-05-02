@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ESPEasy P2P",
+        "description": "Listen for ESPEasy C013 broadcasts on the local network.",
+        "data": {
+          "port": "UDP port"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one ESPEasy P2P listener can be configured."
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "espeasy_p2p",
+  "name": "ESPEasy P2P",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/chance-konstruktion/ha-p2p-espeays",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/chance-konstruktion/ha-p2p-espeays/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
