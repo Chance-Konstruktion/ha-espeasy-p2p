@@ -6,12 +6,17 @@ import asyncio
 import logging
 from typing import Any
 
+import aiohttp
+
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ANNOUNCE_INTERVAL,
     BROADCAST_UNIT,
+    DOMAIN,
     HA_BUILD,
     HA_NODE_TYPE,
     HA_VERSION,
@@ -54,6 +59,9 @@ class ESPEasyP2PCoordinator:
         self.values: dict[tuple[int, int], list[float]] = {}
         self._transport: asyncio.DatagramTransport | None = None
         self._announce_task: asyncio.Task | None = None
+        # Track which node IPs we've already fetched task metadata from so
+        # we don't re-poll on every periodic Type-1 heartbeat.
+        self._fetched_meta_for: set[str] = set()
 
     async def async_start(self) -> None:
         loop = self.hass.loop
@@ -131,6 +139,9 @@ class ESPEasyP2PCoordinator:
             return
         existing = self.nodes.get(node.unit)
         self.nodes[node.unit] = node
+        # Always refresh the HA device entry — entities may have been created
+        # with placeholder metadata before the first Type-1 arrived.
+        self._update_device_registry(node)
         if existing is None:
             _LOGGER.info(
                 "Discovered ESPEasy node unit=%d name=%s ip=%s build=%d",
@@ -144,6 +155,98 @@ class ESPEasyP2PCoordinator:
                     self._transport.sendto(self._build_announce(), (node.ip, self.port))
                 except OSError as err:
                     _LOGGER.debug("Unicast hello to %s failed: %s", node.ip, err)
+        # Fetch task and value names from the node's HTTP /json endpoint.
+        # This is the only reliable way to learn real names if the node
+        # never sends Type-3 broadcasts. Both ESPEasy and RPiEasy expose
+        # this endpoint.
+        if (
+            node.ip
+            and node.ip != "0.0.0.0"
+            and node.ip not in self._fetched_meta_for
+        ):
+            self._fetched_meta_for.add(node.ip)
+            self.hass.async_create_task(self._fetch_node_metadata(node))
+
+    @callback
+    def _update_device_registry(self, node: NodeInfo) -> None:
+        """Create or update the HA device entry for this ESPEasy node."""
+        registry = dr.async_get(self.hass)
+        connections: set[tuple[str, str]] = set()
+        if node.mac and node.mac != "00:00:00:00:00:00":
+            connections.add((dr.CONNECTION_NETWORK_MAC, dr.format_mac(node.mac)))
+        configuration_url = (
+            f"http://{node.ip}:{node.web_port}"
+            if node.ip and node.ip != "0.0.0.0"
+            else None
+        )
+        registry.async_get_or_create(
+            config_entry_id=self.entry_id,
+            identifiers={(DOMAIN, f"unit-{node.unit}")},
+            connections=connections,
+            name=node.name,
+            manufacturer="ESPEasy",
+            model=node.node_type_name,
+            sw_version=str(node.build),
+            configuration_url=configuration_url,
+        )
+
+    async def _fetch_node_metadata(self, node: NodeInfo) -> None:
+        """Pull real task and value names from a node's /json endpoint."""
+        url = f"http://{node.ip}:{node.web_port}/json"
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug(
+                        "GET %s returned HTTP %d", url, resp.status
+                    )
+                    return
+                data = await resp.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+            _LOGGER.debug("Failed to fetch %s: %s", url, err)
+            self._fetched_meta_for.discard(node.ip)
+            return
+
+        sensors = data.get("Sensors") or []
+        learned = 0
+        for sensor in sensors:
+            # ESPEasy uses 1-based TaskNumber on the JSON API, but 0-based
+            # task indices on the C013 wire. Convert here so they match
+            # what we already keyed in self.tasks/self.values.
+            task_number = sensor.get("TaskNumber")
+            if task_number is None:
+                continue
+            task_index = int(task_number) - 1
+            if task_index < 0:
+                continue
+            task_name = str(sensor.get("TaskName") or "").strip()
+            task_values = sensor.get("TaskValues") or []
+            value_names: list[str] = []
+            for tv in task_values:
+                # ESPEasy: "Name". RPiEasy: also "Name".
+                value_names.append(str(tv.get("Name") or "").strip())
+            value_names = (value_names + ["", "", "", ""])[:4]
+            if not task_name and not any(value_names):
+                continue
+            self._on_task(
+                TaskConfig(
+                    src_unit=node.unit,
+                    task_index=task_index,
+                    device_number=int(sensor.get("Type") or 0)
+                    if isinstance(sensor.get("Type"), int)
+                    else 0,
+                    task_name=task_name,
+                    value_names=value_names,
+                )
+            )
+            learned += 1
+        if learned:
+            _LOGGER.info(
+                "Fetched %d task definitions for unit %d (%s) from %s",
+                learned, node.unit, node.name, url,
+            )
 
     @callback
     def _on_task(self, task: TaskConfig) -> None:
