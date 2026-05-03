@@ -16,6 +16,7 @@ from typing import Callable
 from .const import (
     NODE_TYPE_NAMES,
     PACKET_HEADER,
+    PACKET_TYPE_COMMAND,
     PACKET_TYPE_INFO,
     PACKET_TYPE_SENSOR_CONFIG,
     PACKET_TYPE_SENSOR_DATA,
@@ -94,15 +95,8 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr: tuple[str, int]) -> None:
         if len(data) < 2 or data[0] != PACKET_HEADER:
-            _LOGGER.debug(
-                "Ignoring non-C013 UDP packet from %s (len=%d, first=%r)",
-                addr, len(data), data[:4],
-            )
             return
         ptype = data[1]
-        _LOGGER.debug(
-            "RX C013 type=%d from %s len=%d", ptype, addr[0], len(data)
-        )
         try:
             if ptype == PACKET_TYPE_INFO:
                 self._handle_info(data, addr[0])
@@ -110,11 +104,6 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
                 self._handle_sensor_config(data)
             elif ptype in (PACKET_TYPE_SENSOR_DATA, PACKET_TYPE_SENSOR_DATA_EXT):
                 self._handle_sensor_data(data, addr[0])
-            else:
-                _LOGGER.debug(
-                    "Unhandled C013 packet type %d from %s len=%d hex=%s",
-                    ptype, addr, len(data), data.hex(),
-                )
         except (struct.error, ValueError) as err:
             _LOGGER.debug("Bad ESPEasy P2P packet from %s: %s", addr, err)
 
@@ -174,11 +163,6 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
             _decode_string(data[off + i * slot : off + (i + 1) * slot])
             for i in range(4)
         ]
-        _LOGGER.debug(
-            "Type-3 decoded: unit=%d task=%d device=%d name=%r values=%r raw=%s",
-            src_unit, task_index, device_number, task_name, value_names,
-            data.hex(),
-        )
         self._on_task(
             TaskConfig(
                 src_unit=src_unit,
@@ -199,10 +183,6 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
         src_unit = fields[2]
         task_index = fields[4]
         values = list(fields[8:12])
-        _LOGGER.debug(
-            "Sensor data decoded: unit=%d task=%d values=%s ip=%s len=%d",
-            src_unit, task_index, values, src_ip, len(data),
-        )
         self._on_values(
             TaskValues(
                 src_unit=src_unit,
@@ -240,6 +220,19 @@ def build_info_packet(
         node_type & 0xFF,
         web_port & 0xFFFF,
     )
+
+
+def build_command_packet(command: str) -> bytes:
+    """Build a C013 Type-0 (remote command) packet.
+
+    Layout follows rpieasy's _C013_ESPEasyP2P.py receiver, which decodes the
+    payload as a null-terminated UTF-8 string starting after the 2-byte
+    header. Stock ESPEasy mega does not currently parse type-0 packets, so
+    callers should also have an HTTP fallback for those nodes.
+    """
+    payload = command.encode("utf-8", errors="replace")[:252]
+    body = (payload + b"\x00").ljust(253, b"\x00")
+    return bytes([PACKET_HEADER, PACKET_TYPE_COMMAND]) + body
 
 
 def detect_local_ip() -> str:

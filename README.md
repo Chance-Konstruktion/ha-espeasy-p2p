@@ -1,5 +1,9 @@
 # ESPEasy P2P (C013) for Home Assistant
 
+<p align="center">
+  <img src="logo.png" alt="ESPEasy P2P" width="240">
+</p>
+
 **Seamless integration of ESPEasy and RPiEasy nodes into Home Assistant —
 without MQTT, without cloud, purely local push over the native C013
 peer-to-peer protocol.**
@@ -33,7 +37,11 @@ automatically as soon as a node sends its task config.
   and unicasts a hello back to each newly discovered node so it re-sends its
   task configuration immediately. Also exposed as the manual
   `espeasy_p2p.scan` service.
-- One sensor entity per task value (up to four per task)
+- One sensor entity per task value (up to four per task), shown with up to
+  three decimal places
+- Tasks whose value is named `State`, `Output`, `Relay` or `Switch` are
+  exposed as toggleable **switch entities** that send
+  `GET /control?cmd=<taskname>,<0|1>` to the node
 - Each ESPEasy unit appears as a single HA device with a link to its web UI
 
 ## Installation via HACS
@@ -112,7 +120,7 @@ broadcast hello. Reachable nodes will respond within a second or two.
 ## Limitations
 
 - Only one listener instance (it owns the UDP port).
-- Receive-only — sending commands or values from HA back to nodes is not
-  implemented yet.
+- Switch commands go out via the node's HTTP `/control` endpoint, so the
+  node must be reachable on its web port from HA.
 - No node-timeout / aging logic — entities stay `available` once values
   have been seen.
