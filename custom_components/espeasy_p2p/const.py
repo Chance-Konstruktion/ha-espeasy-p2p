@@ -18,7 +18,16 @@ PACKET_HEADER = 255
 PACKET_TYPE_INFO = 1
 PACKET_TYPE_SENSOR_CONFIG = 3
 PACKET_TYPE_SENSOR_DATA = 5
+# Newer ESPEasy mega builds use type 6 for sensor data (extended payload).
+# Decoder treats it the same as type 5 — first 4 floats after the 8-byte
+# routing header. Trailing bytes (per-value sensor type, etc.) are ignored.
+PACKET_TYPE_SENSOR_DATA_EXT = 6
 PACKET_TYPE_COMMAND = 0
+
+# Source unit value used by some firmware versions when the packet is meant
+# as a broadcast rather than addressed from a specific unit. We resolve the
+# real sender via the UDP source IP in that case.
+BROADCAST_UNIT = 255
 
 NODE_TIMEOUT_CYCLES = 10
 ANNOUNCE_INTERVAL = 30

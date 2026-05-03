@@ -11,6 +11,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ANNOUNCE_INTERVAL,
+    BROADCAST_UNIT,
     HA_BUILD,
     HA_NODE_TYPE,
     HA_VERSION,
@@ -159,12 +160,53 @@ class ESPEasyP2PCoordinator:
             )
             async_dispatcher_send(self.hass, self._signal(SIGNAL_TASK_DISCOVERED), task)
 
+    def _resolve_src_unit(self, payload: TaskValues) -> int:
+        """Some firmware sends sensor data with src_unit=255 (broadcast).
+        Resolve the real sender via its IP address against our known nodes."""
+        if payload.src_unit not in (0, BROADCAST_UNIT):
+            return payload.src_unit
+        if payload.src_ip:
+            for unit, node in self.nodes.items():
+                if node.ip == payload.src_ip:
+                    _LOGGER.debug(
+                        "Resolved broadcast sensor data from %s -> unit %d",
+                        payload.src_ip, unit,
+                    )
+                    return unit
+        # Last resort: keep whatever the packet had.
+        return payload.src_unit
+
     @callback
     def _on_values(self, payload: TaskValues) -> None:
-        key = (payload.src_unit, payload.task_index)
+        src_unit = self._resolve_src_unit(payload)
+        key = (src_unit, payload.task_index)
         self.values[key] = payload.values
+        # Auto-create a placeholder TaskConfig the first time we see values
+        # for a (unit, task) pair. ESPEasy nodes often skip Type-3 (sensor
+        # config) on boot, so without this fallback no entities would ever
+        # appear. If a real Type-3 arrives later it overwrites the synthetic
+        # entry and the entity name updates dynamically (see sensor.py).
+        if key not in self.tasks:
+            synthetic = TaskConfig(
+                src_unit=src_unit,
+                task_index=payload.task_index,
+                device_number=0,
+                task_name=f"Task {payload.task_index}",
+                value_names=[
+                    f"Value {i + 1}" for i in range(len(payload.values))
+                ],
+            )
+            self._on_task(synthetic)
+        # Always rewrite payload.src_unit so downstream subscribers see the
+        # resolved unit, not the raw broadcast 255.
+        resolved = TaskValues(
+            src_unit=src_unit,
+            task_index=payload.task_index,
+            values=payload.values,
+            src_ip=payload.src_ip,
+        )
         async_dispatcher_send(
-            self.hass, self._signal(SIGNAL_VALUE_UPDATED), payload
+            self.hass, self._signal(SIGNAL_VALUE_UPDATED), resolved
         )
 
     def diagnostics(self) -> dict[str, Any]:
