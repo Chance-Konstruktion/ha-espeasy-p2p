@@ -383,6 +383,45 @@ class ESPEasyP2PCoordinator:
             self.hass, self._signal(SIGNAL_VALUE_UPDATED), resolved
         )
 
+    async def async_refetch_metadata(self) -> None:
+        """Force a /json re-fetch for every known node."""
+        self._fetched_meta_for.clear()
+        for node in list(self.nodes.values()):
+            if node.ip and node.ip != "0.0.0.0":
+                self._fetched_meta_for.add(node.ip)
+                await self._fetch_node_metadata_safe(node)
+
+    async def async_send_raw_command(self, unit: int, command: str) -> dict[str, Any]:
+        """Send an arbitrary ESPEasy command to a unit via P2P + HTTP.
+
+        Returns a dict describing what happened, suitable for logging or for
+        a future service response.
+        """
+        node = self.nodes.get(unit)
+        if node is None or not node.ip or node.ip == "0.0.0.0":
+            _LOGGER.warning(
+                "send_command: unit %d unknown or has no IP", unit
+            )
+            return {"ok": False, "reason": "unknown_unit"}
+        p2p_ok = self.send_p2p_command(node.ip, command)
+        url = f"http://{node.ip}:{node.web_port}/control"
+        session = async_get_clientsession(self.hass)
+        status: int | str = "n/a"
+        body = ""
+        try:
+            async with session.get(
+                url, params={"cmd": command}, timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                status = resp.status
+                body = (await resp.text())[:200]
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            status = f"error: {err}"
+        _LOGGER.info(
+            "send_command unit=%d cmd=%r -> p2p=%s http=%s body=%r",
+            unit, command, p2p_ok, status, body,
+        )
+        return {"ok": True, "p2p": p2p_ok, "http_status": status, "body": body}
+
     def send_p2p_command(self, ip: str, command: str) -> bool:
         """Send a C013 Type-0 command packet to a single node over UDP.
 
