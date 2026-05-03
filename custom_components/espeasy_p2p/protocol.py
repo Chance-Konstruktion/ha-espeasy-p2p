@@ -16,6 +16,7 @@ from typing import Callable
 from .const import (
     NODE_TYPE_NAMES,
     PACKET_HEADER,
+    PACKET_TYPE_COMMAND,
     PACKET_TYPE_INFO,
     PACKET_TYPE_SENSOR_CONFIG,
     PACKET_TYPE_SENSOR_DATA,
@@ -240,6 +241,19 @@ def build_info_packet(
         node_type & 0xFF,
         web_port & 0xFFFF,
     )
+
+
+def build_command_packet(command: str) -> bytes:
+    """Build a C013 Type-0 (remote command) packet.
+
+    Layout follows rpieasy's _C013_ESPEasyP2P.py receiver, which decodes the
+    payload as a null-terminated UTF-8 string starting after the 2-byte
+    header. Stock ESPEasy mega does not currently parse type-0 packets, so
+    callers should also have an HTTP fallback for those nodes.
+    """
+    payload = command.encode("utf-8", errors="replace")[:252]
+    body = (payload + b"\x00").ljust(253, b"\x00")
+    return bytes([PACKET_HEADER, PACKET_TYPE_COMMAND]) + body
 
 
 def detect_local_ip() -> str:

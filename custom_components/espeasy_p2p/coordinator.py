@@ -29,6 +29,7 @@ from .protocol import (
     NodeInfo,
     TaskConfig,
     TaskValues,
+    build_command_packet,
     build_info_packet,
     create_listener,
     detect_local_ip,
@@ -368,6 +369,23 @@ class ESPEasyP2PCoordinator:
         async_dispatcher_send(
             self.hass, self._signal(SIGNAL_VALUE_UPDATED), resolved
         )
+
+    def send_p2p_command(self, ip: str, command: str) -> bool:
+        """Send a C013 Type-0 command packet to a single node over UDP.
+
+        Returns True if the packet was handed to the OS. RPiEasy executes the
+        command; stock ESPEasy mega ignores type-0 today, so callers should
+        treat this as best-effort and pair it with an HTTP fallback.
+        """
+        if self._transport is None or not ip or ip == "0.0.0.0":
+            return False
+        try:
+            self._transport.sendto(build_command_packet(command), (ip, self.port))
+            _LOGGER.debug("Sent C013 type-0 cmd %r to %s:%s", command, ip, self.port)
+            return True
+        except OSError as err:
+            _LOGGER.debug("UDP command to %s failed: %s", ip, err)
+            return False
 
     def diagnostics(self) -> dict[str, Any]:
         return {
