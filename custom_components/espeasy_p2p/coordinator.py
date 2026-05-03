@@ -241,6 +241,18 @@ class ESPEasyP2PCoordinator:
             task_index = int(task_number) - 1
             if task_index < 0:
                 continue
+            enabled_raw = sensor.get("TaskEnabled")
+            if enabled_raw is not None:
+                if isinstance(enabled_raw, bool):
+                    enabled = enabled_raw
+                else:
+                    enabled = str(enabled_raw).strip().lower() in ("true", "1")
+                if not enabled:
+                    continue
+            else:
+                enabled = True
+
+            plugin_type = str(sensor.get("Type") or "").strip()
             task_name = str(sensor.get("TaskName") or "").strip()
             task_values = sensor.get("TaskValues") or []
             value_names: list[str] = []
@@ -254,11 +266,11 @@ class ESPEasyP2PCoordinator:
                 TaskConfig(
                     src_unit=node.unit,
                     task_index=task_index,
-                    device_number=int(sensor.get("Type") or 0)
-                    if isinstance(sensor.get("Type"), int)
-                    else 0,
+                    device_number=0,
                     task_name=task_name,
                     value_names=value_names,
+                    plugin_type=plugin_type,
+                    enabled=enabled,
                 )
             )
             learned += 1
@@ -309,6 +321,24 @@ class ESPEasyP2PCoordinator:
     @callback
     def _on_values(self, payload: TaskValues) -> None:
         src_unit = self._resolve_src_unit(payload)
+        if src_unit in (0, BROADCAST_UNIT):
+            _LOGGER.debug(
+                "Cannot resolve sender for broadcast sensor data from %s; "
+                "dropping packet and probing the source",
+                payload.src_ip,
+            )
+            if (
+                self._transport is not None
+                and payload.src_ip
+                and payload.src_ip != "0.0.0.0"
+            ):
+                try:
+                    self._transport.sendto(
+                        self._build_announce(), (payload.src_ip, self.port)
+                    )
+                except OSError as err:
+                    _LOGGER.debug("Probe announce to %s failed: %s", payload.src_ip, err)
+            return
         key = (src_unit, payload.task_index)
         self.values[key] = payload.values
         # Track that this (unit, task) is alive even before we know the

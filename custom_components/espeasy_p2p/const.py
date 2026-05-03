@@ -39,12 +39,14 @@ SIGNAL_VALUE_UPDATED = f"{DOMAIN}_value_updated"
 NODE_TYPE_NAMES = {
     1: "ESP Easy",
     5: "RPiEasy",
-    17: "ESP Easy-M",
-    33: "ESP Easy32",
+    17: "ESPEasy Mega (ESP8266)",
+    33: "ESPEasy Mega (ESP32)",
     65: "Arduino Easy",
     81: "Nano Easy",
     97: "ATmega LoRa",
 }
+
+SWITCH_VALUE_NAMES = frozenset({"state", "output", "relay", "switch"})
 
 # Node-type byte we use when announcing HA on the C013 mesh.
 #
