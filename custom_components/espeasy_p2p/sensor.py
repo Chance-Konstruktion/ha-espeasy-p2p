@@ -34,9 +34,13 @@ async def async_setup_entry(
     @callback
     def _add_for_task(task: TaskConfig) -> None:
         new_entities: list[ESPEasyP2PValueSensor] = []
-        for value_index, value_name in enumerate(task.value_names):
-            if not value_name:
-                continue
+        # Always create 4 entity slots (the C013 protocol carries up to 4
+        # values per task). Real value names — when they arrive via Type-3 —
+        # update the entity name dynamically. Without this, a node that
+        # only ever sends Type-5/6 with no value-name metadata produces no
+        # entities at all.
+        slots = max(4, len(task.value_names))
+        for value_index in range(slots):
             key = (task.src_unit, task.task_index, value_index)
             if key in known:
                 continue
@@ -48,8 +52,6 @@ async def async_setup_entry(
                     src_unit=task.src_unit,
                     task_index=task.task_index,
                     value_index=value_index,
-                    task_name=task.task_name,
-                    value_name=value_name,
                 )
             )
         if new_entities:
@@ -81,22 +83,19 @@ class ESPEasyP2PValueSensor(SensorEntity):
         src_unit: int,
         task_index: int,
         value_index: int,
-        task_name: str,
-        value_name: str,
     ) -> None:
         self._coordinator = coordinator
         self._entry_id = entry_id
         self._src_unit = src_unit
         self._task_index = task_index
         self._value_index = value_index
-        self._attr_name = f"{task_name} {value_name}".strip() or value_name
         self._attr_unique_id = (
             f"espeasy_p2p_{src_unit}_{task_index}_{value_index}"
         )
         node = coordinator.nodes.get(src_unit)
         identifiers = {(DOMAIN, f"unit-{src_unit}")}
         connections = set()
-        if node is not None:
+        if node is not None and node.mac and node.mac != "00:00:00:00:00:00":
             connections.add(("mac", format_mac(node.mac)))
         self._attr_device_info = DeviceInfo(
             identifiers=identifiers,
@@ -106,7 +105,9 @@ class ESPEasyP2PValueSensor(SensorEntity):
             model=node.node_type_name if node else None,
             sw_version=str(node.build) if node else None,
             configuration_url=(
-                f"http://{node.ip}:{node.web_port}" if node and node.ip else None
+                f"http://{node.ip}:{node.web_port}"
+                if node and node.ip and node.ip != "0.0.0.0"
+                else None
             ),
         )
 
@@ -118,6 +119,13 @@ class ESPEasyP2PValueSensor(SensorEntity):
                 self._handle_update,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SIGNAL_TASK_DISCOVERED}_{self._entry_id}",
+                self._handle_task_update,
+            )
+        )
 
     @callback
     def _handle_update(self, payload: TaskValues) -> None:
@@ -126,9 +134,29 @@ class ESPEasyP2PValueSensor(SensorEntity):
             or payload.task_index != self._task_index
         ):
             return
-        if self._value_index >= len(payload.values):
+        self.async_write_ha_state()
+
+    @callback
+    def _handle_task_update(self, task: TaskConfig) -> None:
+        # When a real Type-3 arrives after we created entities from
+        # synthetic placeholder names, refresh the entity name and ensure
+        # the device-info reflects any newly learned node metadata.
+        if task.src_unit != self._src_unit or task.task_index != self._task_index:
             return
         self.async_write_ha_state()
+
+    @property
+    def name(self) -> str | None:
+        task = self._coordinator.tasks.get((self._src_unit, self._task_index))
+        if task and self._value_index < len(task.value_names):
+            value_name = task.value_names[self._value_index]
+            if value_name:
+                if task.task_name:
+                    return f"{task.task_name} {value_name}".strip()
+                return value_name
+        if task and task.task_name:
+            return f"{task.task_name} value {self._value_index + 1}"
+        return f"Task {self._task_index} value {self._value_index + 1}"
 
     @property
     def native_value(self) -> float | None:

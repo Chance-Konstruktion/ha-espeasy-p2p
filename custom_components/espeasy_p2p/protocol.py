@@ -19,6 +19,7 @@ from .const import (
     PACKET_TYPE_INFO,
     PACKET_TYPE_SENSOR_CONFIG,
     PACKET_TYPE_SENSOR_DATA,
+    PACKET_TYPE_SENSOR_DATA_EXT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class TaskValues:
     src_unit: int
     task_index: int
     values: list[float]
+    src_ip: str = ""
 
 
 @dataclass
@@ -104,10 +106,13 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
                 self._handle_info(data, addr[0])
             elif ptype == PACKET_TYPE_SENSOR_CONFIG:
                 self._handle_sensor_config(data)
-            elif ptype == PACKET_TYPE_SENSOR_DATA:
-                self._handle_sensor_data(data)
+            elif ptype in (PACKET_TYPE_SENSOR_DATA, PACKET_TYPE_SENSOR_DATA_EXT):
+                self._handle_sensor_data(data, addr[0])
             else:
-                _LOGGER.debug("Unhandled C013 packet type %d from %s", ptype, addr)
+                _LOGGER.debug(
+                    "Unhandled C013 packet type %d from %s len=%d hex=%s",
+                    ptype, addr, len(data), data.hex(),
+                )
         except (struct.error, ValueError) as err:
             _LOGGER.debug("Bad ESPEasy P2P packet from %s: %s", addr, err)
 
@@ -140,28 +145,38 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
         )
 
     def _handle_sensor_config(self, data: bytes) -> None:
-        # Layout: 2 header bytes + 5 routing bytes (src_unit, dst_unit, src_task,
-        # dst_task, device_number) followed by null-padded ASCII fields. The
-        # reference implementation uses 25- or 26-byte string slots for the
-        # task name and 4 value names. To be tolerant of both, we slice the
-        # remaining payload into equal chunks rather than relying on a fixed
-        # struct size.
+        # Layout (rpieasy + ESPEasy mega):
+        #   2 header bytes
+        #   src_unit, dst_unit, src_task, dst_task, device  (5 bytes)
+        #   taskname (26-byte null-padded ASCII)
+        #   4 × value_name (26-byte null-padded ASCII)
+        # Newer firmware appends extra fields after the value names which we
+        # ignore. We deliberately use fixed offsets here instead of slicing
+        # the payload evenly, because the trailing extension bytes would
+        # otherwise distort the value-name positions.
+        slot = 26
         header_len = 7
-        if len(data) <= header_len:
+        if len(data) < header_len + slot + 4 * slot:
+            _LOGGER.debug(
+                "Type-3 packet too short (%d bytes), skipping. Hex: %s",
+                len(data), data.hex(),
+            )
             return
         src_unit = data[2]
         task_index = data[4]
         device_number = data[6]
-        payload = data[header_len:]
-        # Expect 5 strings (taskname + 4 value names). Compute slot width.
-        slot_count = 5
-        slot = max(1, len(payload) // slot_count)
-        strings = [
-            _decode_string(payload[i * slot : (i + 1) * slot])
-            for i in range(slot_count)
+        off = header_len
+        task_name = _decode_string(data[off : off + slot])
+        off += slot
+        value_names = [
+            _decode_string(data[off + i * slot : off + (i + 1) * slot])
+            for i in range(4)
         ]
-        task_name = strings[0]
-        value_names = strings[1:5]
+        _LOGGER.debug(
+            "Type-3 decoded: unit=%d task=%d device=%d name=%r values=%r raw=%s",
+            src_unit, task_index, device_number, task_name, value_names,
+            data.hex(),
+        )
         self._on_task(
             TaskConfig(
                 src_unit=src_unit,
@@ -172,15 +187,27 @@ class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
             )
         )
 
-    def _handle_sensor_data(self, data: bytes) -> None:
+    def _handle_sensor_data(self, data: bytes, src_ip: str = "") -> None:
         if len(data) < SENSOR_DATA_STRUCT.size:
+            _LOGGER.debug(
+                "Type-5/6 packet too short (%d bytes) hex=%s", len(data), data.hex()
+            )
             return
         fields = SENSOR_DATA_STRUCT.unpack_from(data)
         src_unit = fields[2]
         task_index = fields[4]
         values = list(fields[8:12])
+        _LOGGER.debug(
+            "Sensor data decoded: unit=%d task=%d values=%s ip=%s len=%d",
+            src_unit, task_index, values, src_ip, len(data),
+        )
         self._on_values(
-            TaskValues(src_unit=src_unit, task_index=task_index, values=values)
+            TaskValues(
+                src_unit=src_unit,
+                task_index=task_index,
+                values=values,
+                src_ip=src_ip,
+            )
         )
 
 

@@ -30,6 +30,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     name = entry.data.get(CONF_NAME, DEFAULT_NAME)
+    _LOGGER.info(
+        "Loading ESPEasy P2P entry %s with port=%s unit=%s name=%s (raw data=%s)",
+        entry.entry_id, port, unit, name, dict(entry.data),
+    )
+    # If the entry was created by an older version of the integration with
+    # an empty data dict, persist the resolved defaults so the next reload
+    # has the correct values without surprises.
+    if not entry.data or any(
+        key not in entry.data for key in (CONF_PORT, CONF_UNIT, CONF_NAME)
+    ):
+        hass.config_entries.async_update_entry(
+            entry,
+            data={CONF_PORT: port, CONF_UNIT: unit, CONF_NAME: name},
+        )
+        _LOGGER.info("Backfilled missing config entry data with defaults")
     coordinator = ESPEasyP2PCoordinator(hass, entry.entry_id, port, unit, name)
     try:
         await coordinator.async_start()
