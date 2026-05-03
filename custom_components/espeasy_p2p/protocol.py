@@ -57,6 +57,8 @@ class TaskConfig:
     device_number: int
     task_name: str
     value_names: list[str]
+    plugin_type: str = ""
+    enabled: bool = True
 
 
 @dataclass
