@@ -165,30 +165,47 @@ class ESPEasyP2PSwitch(SwitchEntity):
             return
         task = self._coordinator.tasks.get((self._src_unit, self._task_index))
         task_name = (task.task_name if task else "") or f"task{self._task_index}"
-        cmd = f"{task_name},{state}"
+        gpio_pin = task.gpio_pin if task else None
 
-        # Primary: send a C013 Type-0 command over UDP. RPiEasy executes it
-        # directly; stock ESPEasy mega ignores it (no type-0 handler). The
-        # HTTP fallback below covers ESPEasy mega.
-        p2p_ok = self._coordinator.send_p2p_command(node.ip, cmd)
+        # Build the candidate commands. We try them in order until one
+        # returns HTTP 200 with a body that does not look like an error.
+        # - "gpio,<pin>,<state>" works for "Switch input" tasks that read a
+        #   GPIO directly (the most common setup with relays/pumps).
+        # - "<taskname>,<state>" works for plugins like "Generic Dummy"
+        #   or "Output - PWM Motor" that respond to their task name.
+        candidates: list[str] = []
+        if gpio_pin is not None:
+            candidates.append(f"gpio,{gpio_pin},{state}")
+        candidates.append(f"{task_name},{state}")
 
-        # Fallback / parallel: HTTP /control. Idempotent (`<task>,<0|1>` sets
-        # an absolute state), so executing it on top of a successful P2P
-        # command is harmless.
+        # Fire-and-forget P2P (RPiEasy accepts type-0; stock ESPEasy ignores).
+        for cmd in candidates:
+            self._coordinator.send_p2p_command(node.ip, cmd)
+
+        # HTTP /control: try each candidate and stop at the first success.
         url = f"http://{node.ip}:{node.web_port}/control"
-        params = {"cmd": cmd}
         session = async_get_clientsession(self.hass)
-        http_status: int | str = "n/a"
-        http_body = ""
-        try:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                http_status = resp.status
-                http_body = (await resp.text())[:200]
-        except (aiohttp.ClientError, TimeoutError) as err:
-            http_status = f"error: {err}"
+        success = False
+        last_status: int | str = "n/a"
+        last_body = ""
+        last_cmd = ""
+        for cmd in candidates:
+            last_cmd = cmd
+            try:
+                async with session.get(
+                    url, params={"cmd": cmd}, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    last_status = resp.status
+                    last_body = (await resp.text())[:200]
+                    if resp.status == 200 and "unknown" not in last_body.lower():
+                        success = True
+                        break
+            except (aiohttp.ClientError, TimeoutError) as err:
+                last_status = f"error: {err}"
         _LOGGER.info(
-            "Switch unit=%d task=%r cmd=%r -> p2p=%s http=%s body=%r",
-            self._src_unit, task_name, cmd, p2p_ok, http_status, http_body,
+            "Switch unit=%d task=%r pin=%s state=%d -> success=%s last_cmd=%r http=%s body=%r",
+            self._src_unit, task_name, gpio_pin, state,
+            success, last_cmd, last_status, last_body,
         )
         # Optimistic update
         values = list(self._coordinator.values.get((self._src_unit, self._task_index)) or [0.0, 0.0, 0.0, 0.0])
