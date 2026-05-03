@@ -33,14 +33,15 @@ async def async_setup_entry(
 
     @callback
     def _add_for_task(task: TaskConfig) -> None:
+        # Only create entities for value slots that have a real name. The
+        # coordinator may insert a placeholder TaskConfig with empty names
+        # when sensor data arrives before a Type-3 broadcast or before the
+        # /json fallback completes; we wait for the real names to appear
+        # so the user does not get phantom entities for unused slots.
         new_entities: list[ESPEasyP2PValueSensor] = []
-        # Always create 4 entity slots (the C013 protocol carries up to 4
-        # values per task). Real value names — when they arrive via Type-3 —
-        # update the entity name dynamically. Without this, a node that
-        # only ever sends Type-5/6 with no value-name metadata produces no
-        # entities at all.
-        slots = max(4, len(task.value_names))
-        for value_index in range(slots):
+        for value_index, value_name in enumerate(task.value_names):
+            if not value_name:
+                continue
             key = (task.src_unit, task.task_index, value_index)
             if key in known:
                 continue

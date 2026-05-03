@@ -140,8 +140,18 @@ class ESPEasyP2PCoordinator:
         existing = self.nodes.get(node.unit)
         self.nodes[node.unit] = node
         # Always refresh the HA device entry — entities may have been created
-        # with placeholder metadata before the first Type-1 arrived.
-        self._update_device_registry(node)
+        # with placeholder metadata before the first Type-1 arrived. Wrap
+        # defensively: a failure here must not break node discovery for the
+        # rest of the coordinator pipeline. RPiEasy in particular has been
+        # observed to send Type-1 packets that cause the registry update to
+        # raise; we want the discovery and the JSON fallback to still run.
+        try:
+            self._update_device_registry(node)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception(
+                "Failed to update HA device entry for unit %d (%s)",
+                node.unit, node.name,
+            )
         if existing is None:
             _LOGGER.info(
                 "Discovered ESPEasy node unit=%d name=%s ip=%s build=%d",
@@ -165,7 +175,17 @@ class ESPEasyP2PCoordinator:
             and node.ip not in self._fetched_meta_for
         ):
             self._fetched_meta_for.add(node.ip)
-            self.hass.async_create_task(self._fetch_node_metadata(node))
+            self.hass.async_create_task(self._fetch_node_metadata_safe(node))
+
+    async def _fetch_node_metadata_safe(self, node: NodeInfo) -> None:
+        try:
+            await self._fetch_node_metadata(node)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception(
+                "Unhandled error fetching /json for unit %d (%s)",
+                node.unit, node.name,
+            )
+            self._fetched_meta_for.discard(node.ip)
 
     @callback
     def _update_device_registry(self, node: NodeInfo) -> None:
@@ -251,9 +271,16 @@ class ESPEasyP2PCoordinator:
     @callback
     def _on_task(self, task: TaskConfig) -> None:
         key = (task.src_unit, task.task_index)
-        is_new = key not in self.tasks
+        prev = self.tasks.get(key)
         self.tasks[key] = task
-        if is_new:
+        # Fire the discovery signal whenever this task gains real value
+        # names that weren't there before. That covers both the initial
+        # discovery and the case where a placeholder TaskConfig (created
+        # from incoming sensor data with no metadata yet) gets replaced
+        # by the real config from /json or a Type-3 broadcast.
+        prev_named = bool(prev and any(v for v in prev.value_names))
+        now_named = any(v for v in task.value_names)
+        if now_named and not prev_named:
             _LOGGER.info(
                 "Discovered task %d on unit %d: %s (values=%s)",
                 task.task_index,
@@ -284,22 +311,22 @@ class ESPEasyP2PCoordinator:
         src_unit = self._resolve_src_unit(payload)
         key = (src_unit, payload.task_index)
         self.values[key] = payload.values
-        # Auto-create a placeholder TaskConfig the first time we see values
-        # for a (unit, task) pair. ESPEasy nodes often skip Type-3 (sensor
-        # config) on boot, so without this fallback no entities would ever
-        # appear. If a real Type-3 arrives later it overwrites the synthetic
-        # entry and the entity name updates dynamically (see sensor.py).
+        # Track that this (unit, task) is alive even before we know the
+        # real names. We deliberately do NOT create entities here from a
+        # placeholder TaskConfig — the user does not want phantom "Task X
+        # / Value 1-4" entities for slots that are not actually wired up
+        # in the source node. Entities are only created once we have real
+        # value names from a Type-3 broadcast or the node's /json HTTP
+        # endpoint (see _fetch_node_metadata).
         if key not in self.tasks:
-            synthetic = TaskConfig(
+            placeholder = TaskConfig(
                 src_unit=src_unit,
                 task_index=payload.task_index,
                 device_number=0,
-                task_name=f"Task {payload.task_index}",
-                value_names=[
-                    f"Value {i + 1}" for i in range(len(payload.values))
-                ],
+                task_name="",
+                value_names=["", "", "", ""],
             )
-            self._on_task(synthetic)
+            self.tasks[key] = placeholder
         # Always rewrite payload.src_unit so downstream subscribers see the
         # resolved unit, not the raw broadcast 255.
         resolved = TaskValues(
