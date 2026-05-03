@@ -16,7 +16,9 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_UNIT,
     DOMAIN,
+    SERVICE_REFETCH_METADATA,
     SERVICE_SCAN,
+    SERVICE_SEND_COMMAND,
 )
 from .coordinator import ESPEasyP2PCoordinator
 
@@ -61,7 +63,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             for c in hass.data.get(DOMAIN, {}).values():
                 c.async_scan()
 
+        async def _handle_refetch(_call: ServiceCall) -> None:
+            for c in hass.data.get(DOMAIN, {}).values():
+                await c.async_refetch_metadata()
+
+        async def _handle_send_command(call: ServiceCall) -> None:
+            unit = int(call.data["unit"])
+            command = str(call.data["command"])
+            for c in hass.data.get(DOMAIN, {}).values():
+                if unit in c.nodes:
+                    await c.async_send_raw_command(unit, command)
+                    return
+            _LOGGER.warning("send_command: unit %d not found in any entry", unit)
+
         hass.services.async_register(DOMAIN, SERVICE_SCAN, _handle_scan)
+        hass.services.async_register(
+            DOMAIN, SERVICE_REFETCH_METADATA, _handle_refetch
+        )
+        hass.services.async_register(
+            DOMAIN, SERVICE_SEND_COMMAND, _handle_send_command
+        )
 
     return True
 
@@ -76,4 +97,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_stop()
     if not hass.data.get(DOMAIN):
         hass.services.async_remove(DOMAIN, SERVICE_SCAN)
+        hass.services.async_remove(DOMAIN, SERVICE_REFETCH_METADATA)
+        hass.services.async_remove(DOMAIN, SERVICE_SEND_COMMAND)
     return unload_ok

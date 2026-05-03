@@ -4,3 +4,37 @@ scan:
     Broadcast a node-info packet so all reachable ESPEasy nodes immediately
     announce themselves and their tasks instead of waiting for the next
     periodic broadcast.
+
+refetch_metadata:
+  name: Re-fetch task metadata
+  description: >
+    Force a refresh of the /json metadata for every known node. Useful after
+    upgrading the integration so that newly extracted fields (e.g. GPIO pins)
+    are picked up without restarting Home Assistant.
+
+send_command:
+  name: Send raw command to a node
+  description: >
+    Send an arbitrary ESPEasy command to a specific node, both via C013 P2P
+    (Type-0) and via HTTP /control. The HTTP response is logged at INFO so
+    you can verify exactly what the node accepts.
+  fields:
+    unit:
+      name: Unit number
+      description: ESPEasy unit number of the target node.
+      required: true
+      example: 9
+      selector:
+        number:
+          min: 1
+          max: 254
+          mode: box
+    command:
+      name: Command
+      description: >
+        The command string, exactly as you would type it after `?cmd=` in the
+        node's web UI (e.g. `gpio,12,1` or `pufferpumpe,0`).
+      required: true
+      example: gpio,12,1
+      selector:
+        text:
