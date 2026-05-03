@@ -170,7 +170,7 @@ class ESPEasyP2PSwitch(SwitchEntity):
         # Primary: send a C013 Type-0 command over UDP. RPiEasy executes it
         # directly; stock ESPEasy mega ignores it (no type-0 handler). The
         # HTTP fallback below covers ESPEasy mega.
-        self._coordinator.send_p2p_command(node.ip, cmd)
+        p2p_ok = self._coordinator.send_p2p_command(node.ip, cmd)
 
         # Fallback / parallel: HTTP /control. Idempotent (`<task>,<0|1>` sets
         # an absolute state), so executing it on top of a successful P2P
@@ -178,12 +178,18 @@ class ESPEasyP2PSwitch(SwitchEntity):
         url = f"http://{node.ip}:{node.web_port}/control"
         params = {"cmd": cmd}
         session = async_get_clientsession(self.hass)
+        http_status: int | str = "n/a"
+        http_body = ""
         try:
             async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                body = await resp.text()
-                _LOGGER.debug("Sent %s ?cmd=%s -> HTTP %d %s", url, cmd, resp.status, body[:120])
+                http_status = resp.status
+                http_body = (await resp.text())[:200]
         except (aiohttp.ClientError, TimeoutError) as err:
-            _LOGGER.debug("HTTP fallback to %s failed: %s", url, err)
+            http_status = f"error: {err}"
+        _LOGGER.info(
+            "Switch unit=%d task=%r cmd=%r -> p2p=%s http=%s body=%r",
+            self._src_unit, task_name, cmd, p2p_ok, http_status, http_body,
+        )
         # Optimistic update
         values = list(self._coordinator.values.get((self._src_unit, self._task_index)) or [0.0, 0.0, 0.0, 0.0])
         while len(values) <= self._value_index:
