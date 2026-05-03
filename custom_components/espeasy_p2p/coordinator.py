@@ -254,6 +254,18 @@ class ESPEasyP2PCoordinator:
                 enabled = True
 
             plugin_type = str(sensor.get("Type") or "").strip()
+            gpio_pin: int | None = None
+            for pin_key in ("TaskDeviceGPIO1", "GPIO1", "Pin", "TaskDeviceGPIO"):
+                raw_pin = sensor.get(pin_key)
+                if raw_pin is None:
+                    continue
+                try:
+                    pin_int = int(raw_pin)
+                except (TypeError, ValueError):
+                    continue
+                if pin_int >= 0:
+                    gpio_pin = pin_int
+                    break
             task_name = str(sensor.get("TaskName") or "").strip()
             task_values = sensor.get("TaskValues") or []
             value_names: list[str] = []
@@ -272,6 +284,7 @@ class ESPEasyP2PCoordinator:
                     value_names=value_names,
                     plugin_type=plugin_type,
                     enabled=enabled,
+                    gpio_pin=gpio_pin,
                 )
             )
             learned += 1

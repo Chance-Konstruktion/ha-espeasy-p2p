@@ -60,6 +60,7 @@ class TaskConfig:
     value_names: list[str]
     plugin_type: str = ""
     enabled: bool = True
+    gpio_pin: int | None = None
 
 
 @dataclass
