@@ -165,12 +165,13 @@ class ESPEasyP2PSwitch(SwitchEntity):
             return
         task = self._coordinator.tasks.get((self._src_unit, self._task_index))
         task_name = (task.task_name if task else "") or f"task{self._task_index}"
-        gpio_pin = task.gpio_pin if task else None
+        gpio_pin = self._coordinator.get_gpio_pin(self._src_unit, task_name)
 
         # Build the candidate commands. We try them in order until one
-        # returns HTTP 200 with a body that does not look like an error.
-        # - "gpio,<pin>,<state>" works for "Switch input" tasks that read a
-        #   GPIO directly (the most common setup with relays/pumps).
+        # returns HTTP 200 with a body that looks like a real success.
+        # - "gpio,<pin>,<state>" works for "Switch input"/"Output Helper"
+        #   tasks (the most common setup with relays/pumps). RPiEasy needs
+        #   this form: it answers <taskname>,<state> with body 'False'.
         # - "<taskname>,<state>" works for plugins like "Generic Dummy"
         #   or "Output - PWM Motor" that respond to their task name.
         candidates: list[str] = []
@@ -197,7 +198,7 @@ class ESPEasyP2PSwitch(SwitchEntity):
                 ) as resp:
                     last_status = resp.status
                     last_body = (await resp.text())[:200]
-                    if resp.status == 200 and "unknown" not in last_body.lower():
+                    if resp.status == 200 and _looks_like_success(last_body):
                         success = True
                         break
             except (aiohttp.ClientError, TimeoutError) as err:
@@ -207,10 +208,38 @@ class ESPEasyP2PSwitch(SwitchEntity):
             self._src_unit, task_name, gpio_pin, state,
             success, last_cmd, last_status, last_body,
         )
-        # Optimistic update
+        if not success:
+            if gpio_pin is None:
+                _LOGGER.warning(
+                    "Switch %r on unit %d has no known GPIO pin and the "
+                    "node rejected the task-name command. Call service "
+                    "espeasy_p2p.set_gpio_pin with unit=%d task_name=%r "
+                    "pin=<bcm-pin> to fix this permanently.",
+                    task_name, self._src_unit, self._src_unit, task_name,
+                )
+            # Don't update local state — the relay didn't actually move.
+            self.async_write_ha_state()
+            return
         values = list(self._coordinator.values.get((self._src_unit, self._task_index)) or [0.0, 0.0, 0.0, 0.0])
         while len(values) <= self._value_index:
             values.append(0.0)
         values[self._value_index] = float(state)
         self._coordinator.values[(self._src_unit, self._task_index)] = values
         self.async_write_ha_state()
+
+
+def _looks_like_success(body: str) -> bool:
+    """Heuristic: did the node actually execute the command?
+
+    RPiEasy answers an unknown task-name command with literal 'False'
+    (HTTP 200), and 'Unknown command' for unknown verbs. A successful
+    'gpio,N,X' returns either 'BCM<N> set to <X>' or a JSON log entry.
+    """
+    b = body.strip().lower()
+    if not b:
+        return False
+    if b in ("false", "0"):
+        return False
+    if "unknown" in b:
+        return False
+    return True

@@ -15,6 +15,9 @@ DEFAULT_NAME = "Home Assistant"
 SERVICE_SCAN = "scan"
 SERVICE_SEND_COMMAND = "send_command"
 SERVICE_REFETCH_METADATA = "refetch_metadata"
+SERVICE_SET_GPIO_PIN = "set_gpio_pin"
+
+CONF_GPIO_PIN_MAP = "gpio_pin_map"
 
 PACKET_HEADER = 255
 PACKET_TYPE_INFO = 1

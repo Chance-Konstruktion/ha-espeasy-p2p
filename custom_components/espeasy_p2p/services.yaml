@@ -38,3 +38,38 @@ send_command:
       example: gpio,12,1
       selector:
         text:
+
+set_gpio_pin:
+  name: Set GPIO pin for a task
+  description: >
+    Persist a (unit, task name) → GPIO pin mapping. Needed for firmware
+    (notably RPiEasy "Output Helper") that does not expose the pin via
+    /json. Once set, switch toggles use `gpio,<pin>,<state>` directly.
+  fields:
+    unit:
+      name: Unit number
+      description: ESPEasy unit number of the target node.
+      required: true
+      example: 9
+      selector:
+        number:
+          min: 1
+          max: 254
+          mode: box
+    task_name:
+      name: Task name
+      description: The exact TaskName as shown in the node UI.
+      required: true
+      example: zirkulationpumpe
+      selector:
+        text:
+    pin:
+      name: GPIO pin
+      description: BCM pin number that drives the output.
+      required: true
+      example: 16
+      selector:
+        number:
+          min: 0
+          max: 40
+          mode: box

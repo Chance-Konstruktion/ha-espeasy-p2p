@@ -16,6 +16,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .const import (
     ANNOUNCE_INTERVAL,
     BROADCAST_UNIT,
+    CONF_GPIO_PIN_MAP,
     DOMAIN,
     HA_BUILD,
     HA_NODE_TYPE,
@@ -48,6 +49,7 @@ class ESPEasyP2PCoordinator:
         port: int,
         unit: int,
         name: str,
+        pin_overrides: dict[str, int] | None = None,
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -58,11 +60,51 @@ class ESPEasyP2PCoordinator:
         self.nodes: dict[int, NodeInfo] = {}
         self.tasks: dict[tuple[int, int], TaskConfig] = {}
         self.values: dict[tuple[int, int], list[float]] = {}
+        # User-supplied "<unit>/<taskname>" -> GPIO pin overrides. Used when
+        # the firmware (notably RPiEasy) does not expose the pin via /json.
+        self.pin_overrides: dict[str, int] = dict(pin_overrides or {})
         self._transport: asyncio.DatagramTransport | None = None
         self._announce_task: asyncio.Task | None = None
         # Track which node IPs we've already fetched task metadata from so
         # we don't re-poll on every periodic Type-1 heartbeat.
         self._fetched_meta_for: set[str] = set()
+
+    def get_gpio_pin(self, unit: int, task_name: str) -> int | None:
+        """Return the configured/learned GPIO pin for a task, or None."""
+        if task_name:
+            override = self.pin_overrides.get(f"{unit}/{task_name}")
+            if override is not None:
+                return override
+        task = self.tasks.get((unit, self._task_index_for_name(unit, task_name)))
+        if task and task.gpio_pin is not None:
+            return task.gpio_pin
+        return None
+
+    def _task_index_for_name(self, unit: int, task_name: str) -> int:
+        if not task_name:
+            return -1
+        for (u, idx), task in self.tasks.items():
+            if u == unit and task.task_name == task_name:
+                return idx
+        return -1
+
+    def set_pin_override(self, unit: int, task_name: str, pin: int) -> None:
+        """Persist a GPIO pin override for a (unit, task_name)."""
+        self.pin_overrides[f"{unit}/{task_name}"] = pin
+        # Also patch the in-memory TaskConfig so existing entities pick it up.
+        idx = self._task_index_for_name(unit, task_name)
+        if idx >= 0:
+            task = self.tasks[(unit, idx)]
+            self.tasks[(unit, idx)] = TaskConfig(
+                src_unit=task.src_unit,
+                task_index=task.task_index,
+                device_number=task.device_number,
+                task_name=task.task_name,
+                value_names=task.value_names,
+                plugin_type=task.plugin_type,
+                enabled=task.enabled,
+                gpio_pin=pin,
+            )
 
     async def async_start(self) -> None:
         loop = self.hass.loop
@@ -275,6 +317,10 @@ class ESPEasyP2PCoordinator:
             value_names = (value_names + ["", "", "", ""])[:4]
             if not task_name and not any(value_names):
                 continue
+            if gpio_pin is None and task_name:
+                override = self.pin_overrides.get(f"{node.unit}/{task_name}")
+                if override is not None:
+                    gpio_pin = override
             self._on_task(
                 TaskConfig(
                     src_unit=node.unit,
