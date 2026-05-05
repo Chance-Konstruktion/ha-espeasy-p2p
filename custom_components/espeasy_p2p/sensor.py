@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import (
+    PERCENTAGE,
+    UnitOfPressure,
+    UnitOfTemperature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
@@ -168,6 +177,17 @@ class ESPEasyP2PValueSensor(SensorEntity):
         return f"Task {self._task_index} value {self._value_index + 1}"
 
     @property
+    def device_class(self) -> SensorDeviceClass | None:
+        return _classify(self._task(), self._value_index)[0]
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return _classify(self._task(), self._value_index)[1]
+
+    def _task(self) -> TaskConfig | None:
+        return self._coordinator.tasks.get((self._src_unit, self._task_index))
+
+    @property
     def native_value(self) -> float | None:
         values = self._coordinator.values.get((self._src_unit, self._task_index))
         if not values or self._value_index >= len(values):
@@ -177,3 +197,27 @@ class ESPEasyP2PValueSensor(SensorEntity):
     @property
     def available(self) -> bool:
         return (self._src_unit, self._task_index) in self._coordinator.values
+
+
+def _classify(
+    task: TaskConfig | None, value_index: int
+) -> tuple[SensorDeviceClass | None, str | None]:
+    """Map an ESPEasy task/value to a HA device class + unit.
+
+    Driven primarily by the value name (Temperature/Humidity/Pressure) so it
+    works for Dummy Devices that mirror real sensors. Plugin Type is a
+    secondary hint (e.g. 'Environment - DS18b20').
+    """
+    if task is None:
+        return (None, None)
+    value_name = ""
+    if 0 <= value_index < len(task.value_names):
+        value_name = task.value_names[value_index].strip().lower()
+    plugin = task.plugin_type.lower()
+    if "temperature" in value_name or "ds18b20" in plugin or "dht" in plugin:
+        return (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
+    if "humidity" in value_name:
+        return (SensorDeviceClass.HUMIDITY, PERCENTAGE)
+    if "pressure" in value_name:
+        return (SensorDeviceClass.PRESSURE, UnitOfPressure.HPA)
+    return (None, None)

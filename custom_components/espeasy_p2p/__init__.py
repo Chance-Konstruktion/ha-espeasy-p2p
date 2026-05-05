@@ -9,6 +9,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import (
+    CONF_GPIO_PIN_MAP,
     CONF_NAME,
     CONF_PORT,
     CONF_UNIT,
@@ -19,6 +20,7 @@ from .const import (
     SERVICE_REFETCH_METADATA,
     SERVICE_SCAN,
     SERVICE_SEND_COMMAND,
+    SERVICE_SET_GPIO_PIN,
 )
 from .coordinator import ESPEasyP2PCoordinator
 
@@ -47,7 +49,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             data={CONF_PORT: port, CONF_UNIT: unit, CONF_NAME: name},
         )
         _LOGGER.info("Backfilled missing config entry data with defaults")
-    coordinator = ESPEasyP2PCoordinator(hass, entry.entry_id, port, unit, name)
+    pin_overrides = dict(entry.options.get(CONF_GPIO_PIN_MAP, {}))
+    coordinator = ESPEasyP2PCoordinator(
+        hass, entry.entry_id, port, unit, name, pin_overrides=pin_overrides
+    )
     try:
         await coordinator.async_start()
     except OSError as err:
@@ -76,12 +81,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return
             _LOGGER.warning("send_command: unit %d not found in any entry", unit)
 
+        async def _handle_set_gpio_pin(call: ServiceCall) -> None:
+            unit = int(call.data["unit"])
+            task_name = str(call.data["task_name"]).strip()
+            pin = int(call.data["pin"])
+            for entry_id, c in hass.data.get(DOMAIN, {}).items():
+                if unit not in c.nodes:
+                    continue
+                c.set_pin_override(unit, task_name, pin)
+                cfg_entry = hass.config_entries.async_get_entry(entry_id)
+                if cfg_entry is not None:
+                    new_options = dict(cfg_entry.options)
+                    new_options[CONF_GPIO_PIN_MAP] = dict(c.pin_overrides)
+                    hass.config_entries.async_update_entry(
+                        cfg_entry, options=new_options
+                    )
+                _LOGGER.info(
+                    "set_gpio_pin: unit=%d task=%r pin=%d (persisted)",
+                    unit, task_name, pin,
+                )
+                return
+            _LOGGER.warning("set_gpio_pin: unit %d not found", unit)
+
         hass.services.async_register(DOMAIN, SERVICE_SCAN, _handle_scan)
         hass.services.async_register(
             DOMAIN, SERVICE_REFETCH_METADATA, _handle_refetch
         )
         hass.services.async_register(
             DOMAIN, SERVICE_SEND_COMMAND, _handle_send_command
+        )
+        hass.services.async_register(
+            DOMAIN, SERVICE_SET_GPIO_PIN, _handle_set_gpio_pin
         )
 
     return True
@@ -99,4 +129,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_SCAN)
         hass.services.async_remove(DOMAIN, SERVICE_REFETCH_METADATA)
         hass.services.async_remove(DOMAIN, SERVICE_SEND_COMMAND)
+        hass.services.async_remove(DOMAIN, SERVICE_SET_GPIO_PIN)
     return unload_ok
