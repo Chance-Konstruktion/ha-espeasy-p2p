@@ -13,6 +13,11 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from .const import (
     CONF_GPIO_PIN_MAP,
@@ -123,7 +128,7 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
             new_map: dict[str, int] = {}
             for field, value in user_input.items():
                 parsed = _parse_field(field)
-                if parsed is None or value in (None, ""):
+                if parsed is None or value is None:
                     continue
                 unit, task_name = parsed
                 try:
@@ -147,6 +152,9 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
         if not switch_tasks:
             return self.async_abort(reason="no_switch_tasks")
 
+        pin_selector = NumberSelector(
+            NumberSelectorConfig(min=0, max=40, step=1, mode=NumberSelectorMode.BOX)
+        )
         schema_dict: dict[Any, Any] = {}
         for unit, task_name in switch_tasks:
             field = _field_for(unit, task_name)
@@ -158,7 +166,7 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
                     if default is not None
                     else None,
                 )
-            ] = vol.Any("", vol.All(vol.Coerce(int), vol.Range(min=0, max=40)))
+            ] = pin_selector
 
         return self.async_show_form(
             step_id="init",
