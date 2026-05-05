@@ -4,7 +4,7 @@
   <img src="logo.png" alt="ESPEasy P2P" width="240">
 </p>
 
-[Deutsche Version weiter unten / German version below](#espeasy-p2p-c013-für-home-assistant)
+[Deutsche Version weiter unten / German version below](#espeasy-p2p-c013-für-home-assistant) · [Changelog](CHANGELOG.md)
 
 **Local-push integration of ESPEasy and RPiEasy nodes into Home Assistant —
 no MQTT, no cloud, no polling. Pure UDP via the native C013 peer-to-peer
@@ -17,7 +17,7 @@ protocol.**
 | Auto-discovery of nodes                | ✅ working                             |
 | Auto-discovery of tasks / value names  | ✅ working                             |
 | Sensor values (push from node → HA)    | ✅ working                             |
-| Switch entities (HA → node)            | ⚠️ **experimental, often does not work** |
+| Switch entities (HA → node)            | ✅ working (RPiEasy needs one-time pin map) |
 
 **Right now this integration is reliable for reading sensor values only.**
 Switch entities are exposed for tasks whose value is named `State`,
@@ -87,24 +87,48 @@ by stock ESPEasy mega**. The integration tries two paths in order:
    tries `gpio,<pin>,<state>` first (if the GPIO pin was discovered via
    `/json`) and falls back to `<taskname>,<state>`.
 
-Failure modes you may run into:
+### RPiEasy: register the GPIO pin once
 
-- The `Switch input` plugin only **reads** a GPIO pin — toggling has to
-  happen via a separate `gpio,<pin>,<state>` command, which requires the
-  pin to be exposed in the node's `/json` output (older firmware does not
-  expose it).
-- The node may have HTTP authentication enabled.
-- The plugin may simply not have a write command (e.g. a temperature
-  sensor).
+RPiEasy's `Output - Output Helper` plugin does **not** expose its GPIO pin
+in `/json`. Without that pin the integration falls back to
+`<taskname>,<state>`, which RPiEasy answers with HTTP 200 body `False` —
+the relay never moves. Since version 2026-05-05 the integration detects
+this case and logs:
 
-If toggling a switch in HA does nothing, look for the corresponding INFO
-log line (no debug logging needed):
+```
+Switch 'zirkulationpumpe' on unit 9 has no known GPIO pin and the node
+rejected the task-name command. Call service espeasy_p2p.set_gpio_pin
+with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
+permanently.
+```
+
+Fix it once via *Developer Tools → Services*:
+
+```yaml
+service: espeasy_p2p.set_gpio_pin
+data:
+  unit: 9
+  task_name: zirkulationpumpe
+  pin: 16
+```
+
+The mapping is stored in the config entry options and survives restarts.
+After that, toggles use `gpio,16,<state>` directly and succeed.
+
+### Other failure modes
+
+- The node has HTTP authentication enabled (not yet supported).
+- The plugin has no write command (e.g. a pure DS18b20 temperature task).
+- A `Switch input` plugin reads a GPIO but doesn't write it — same fix:
+  set the pin map and the integration will write via `gpio,…`.
+
+If toggling does nothing, the INFO log line shows exactly why:
 
 ```
 Switch unit=9 task='pufferpumpe' pin=12 state=1 -> success=False last_cmd='gpio,12,1' http=400 body='Unknown command'
 ```
 
-The `body=…` part tells you exactly why the node rejected the command.
+The `body=…` part is the node's verbatim response.
 
 You can also test commands manually with the
 **`espeasy_p2p.send_command`** service:
@@ -116,9 +140,8 @@ data:
   command: gpio,12,1
 ```
 
-After upgrading the integration, run **`espeasy_p2p.refetch_metadata`** to
-re-pull `/json` so the new GPIO-pin extraction takes effect without
-restarting HA.
+After upgrading, run **`espeasy_p2p.refetch_metadata`** to re-pull
+`/json` so newly extracted fields take effect without restarting HA.
 
 ## Troubleshooting
 
@@ -156,7 +179,9 @@ broadcast hello. Reachable nodes will respond within a second or two.
 ## Limitations
 
 - Only one listener instance (it owns the UDP port).
-- Switching from HA to a node is experimental and not guaranteed to work —
+- Switching works for any plugin that responds to `gpio,<pin>,<state>` or
+  to its task name; for RPiEasy `Output Helper` you have to register the
+  pin once via `espeasy_p2p.set_gpio_pin` —
   see [Switching limitations](#switching-limitations).
 - No node-timeout / aging logic — entities stay `available` once values
   have been seen.
@@ -176,13 +201,12 @@ C013-Peer-to-Peer-Protokoll.**
 | Auto-Erkennung von Nodes                  | ✅ funktioniert                          |
 | Auto-Erkennung von Tasks / Wertenamen     | ✅ funktioniert                          |
 | Sensorwerte (Push vom Node → HA)          | ✅ funktioniert                          |
-| Switch-Entities (HA → Node)               | ⚠️ **experimentell, klappt oft nicht**   |
+| Switch-Entities (HA → Node)               | ✅ funktioniert (RPiEasy: Pin einmal mappen) |
 
-**Aktuell ist diese Integration zuverlässig nur für das Lesen von
-Sensorwerten.** Tasks, deren Wert `State`, `Output`, `Relay` oder
-`Switch` heißt, werden zusätzlich als Schalter in HA angelegt — das
-tatsächliche Schalten vom HA aus funktioniert allerdings nur bei
-bestimmten Plugin-/Firmware-Kombinationen (siehe
+Tasks, deren Wert `State`, `Output`, `Relay` oder `Switch` heißt, werden
+automatisch als Schalter in HA angelegt. Bei RPiEasy-`Output Helper`
+muss der GPIO-Pin einmalig per Service hinterlegt werden, weil RPiEasy
+den Pin nicht im `/json` ausliefert (siehe
 [Schalt-Einschränkungen](#schalt-einschränkungen)).
 
 ## Datenfluss
@@ -249,16 +273,43 @@ nacheinander:
    der GPIO-Pin über `/json` ermittelt wurde) und fällt dann auf
    `<taskname>,<state>` zurück.
 
-Häufige Fehlerquellen:
+### RPiEasy: GPIO-Pin einmalig registrieren
 
-- Das Plugin **Switch input** *liest* einen GPIO-Pin — Schalten geht nur
-  über `gpio,<pin>,<state>`, was wiederum voraussetzt, dass der Pin im
-  `/json` des Nodes auftaucht (ältere Firmware tut das nicht).
-- Der Node hat eine HTTP-Authentifizierung aktiv.
-- Das Plugin hat schlicht keinen Schreib-Befehl (z. B. ein
-  Temperatursensor).
+Das RPiEasy-Plugin `Output - Output Helper` legt seinen GPIO-Pin **nicht**
+im `/json` offen. Ohne diesen Pin fällt die Integration auf
+`<taskname>,<state>` zurück — RPiEasy antwortet darauf mit HTTP 200 und
+Body `False` und schaltet das Relais nicht. Seit Version 2026-05-05
+erkennt die Integration das und loggt:
 
-Wenn ein Toggle in HA nichts bewirkt, schau dir die INFO-Log-Zeile an
+```
+Switch 'zirkulationpumpe' on unit 9 has no known GPIO pin and the node
+rejected the task-name command. Call service espeasy_p2p.set_gpio_pin
+with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
+permanently.
+```
+
+Einmalig fixen über *Entwicklerwerkzeuge → Dienste*:
+
+```yaml
+service: espeasy_p2p.set_gpio_pin
+data:
+  unit: 9
+  task_name: zirkulationpumpe
+  pin: 16
+```
+
+Das Mapping wird in den Optionen des Config Entries gespeichert und
+übersteht Neustarts. Danach werden Toggles direkt als `gpio,16,<state>`
+gesendet und funktionieren.
+
+### Weitere Fehlerquellen
+
+- Der Node hat HTTP-Auth aktiv (noch nicht unterstützt).
+- Das Plugin hat keinen Schreib-Befehl (z. B. reiner DS18b20-Task).
+- Ein `Switch input`-Plugin *liest* einen GPIO, schreibt aber nicht — gleiche
+  Lösung: Pin-Map setzen, dann schreibt die Integration via `gpio,…`.
+
+Wenn ein Toggle nichts bewirkt, zeigt die INFO-Log-Zeile genau warum
 (Debug muss dafür *nicht* an sein):
 
 ```
@@ -317,7 +368,9 @@ Broadcast-Hello. Erreichbare Nodes antworten in 1–2 Sekunden.
 ## Einschränkungen
 
 - Nur eine Listener-Instanz (sie hält den UDP-Port).
-- Schalten von HA → Node ist experimentell und nicht garantiert — siehe
+- Schalten funktioniert für jedes Plugin, das `gpio,<pin>,<state>` oder
+  seinen Task-Namen versteht; bei RPiEasy `Output Helper` muss der Pin
+  einmalig via `espeasy_p2p.set_gpio_pin` registriert werden — siehe
   [Schalt-Einschränkungen](#schalt-einschränkungen).
 - Keine Node-Timeout-/Aging-Logik — Entities bleiben auf `available`,
   sobald einmal Werte gekommen sind.
