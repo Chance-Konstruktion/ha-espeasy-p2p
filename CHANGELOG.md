@@ -5,6 +5,11 @@ All notable changes to this integration are documented here. Dates use
 
 ## [Unreleased]
 
+### Added
+- **Options flow for the GPIO pin map**: edit pin assignments via
+  *Settings → Devices & Services → ESPEasy P2P → Configure*. One row per
+  discovered switch task; clearing a row removes the override.
+
 ## 2026-05-05
 
 ### Added

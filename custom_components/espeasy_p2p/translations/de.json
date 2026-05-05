@@ -15,6 +15,17 @@
       "single_instance_allowed": "Es kann nur ein ESPEasy P2P Listener konfiguriert werden."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "GPIO-Pin-Zuordnung",
+        "description": "Weise jedem schaltbaren Task einen BCM-GPIO-Pin zu. Bei RPiEasy 'Output Helper' nötig, weil die Firmware den Pin nicht über /json ausliefert. Feld leer lassen, um einen Eintrag zu entfernen. {task_count} Task(s) erkannt."
+      }
+    },
+    "abort": {
+      "no_switch_tasks": "Es wurden noch keine schaltbaren Tasks erkannt. Auf den Node warten oder den Dienst 'Knoten suchen' aufrufen, dann diesen Dialog erneut öffnen."
+    }
+  },
   "services": {
     "scan": {
       "name": "Knoten suchen",
