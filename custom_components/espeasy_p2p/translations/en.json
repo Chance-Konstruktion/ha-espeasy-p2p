@@ -15,6 +15,17 @@
       "single_instance_allowed": "Only one ESPEasy P2P listener can be configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "GPIO pin map",
+        "description": "Assign a BCM GPIO pin to each switch-eligible task. Required for RPiEasy 'Output Helper' tasks because the firmware does not expose the pin in /json. Leave empty to remove an entry. {task_count} task(s) discovered."
+      }
+    },
+    "abort": {
+      "no_switch_tasks": "No switch-eligible tasks have been discovered yet. Wait for nodes to announce or run the 'Scan for nodes' service, then reopen this dialog."
+    }
+  },
   "services": {
     "scan": {
       "name": "Scan for nodes",

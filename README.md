@@ -102,7 +102,9 @@ with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
 permanently.
 ```
 
-Fix it once via *Developer Tools → Services*:
+Fix it once via the integration's UI: *Settings → Devices & Services →
+ESPEasy P2P → Configure*. You'll see one row per discovered switch task —
+fill in the BCM pin and save. Or, equivalently, call the service:
 
 ```yaml
 service: espeasy_p2p.set_gpio_pin
@@ -288,7 +290,9 @@ with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
 permanently.
 ```
 
-Einmalig fixen über *Entwicklerwerkzeuge → Dienste*:
+Einmalig fixen über die UI: *Einstellungen → Geräte & Dienste → ESPEasy
+P2P → Konfigurieren*. Es erscheint eine Zeile pro erkanntem Switch-Task —
+BCM-Pin eintragen und speichern. Alternativ über den Service:
 
 ```yaml
 service: espeasy_p2p.set_gpio_pin
