@@ -208,5 +208,6 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
             data_schema=vol.Schema(schema_dict),
             description_placeholders={
                 "task_count": str(len(switch_tasks)),
+                "state": "{state}",
             },
         )

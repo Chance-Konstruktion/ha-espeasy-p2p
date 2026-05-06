@@ -6,6 +6,11 @@
 
 [Deutsche Version weiter unten / German version below](#espeasy-p2p-c013-für-home-assistant) · [Changelog](CHANGELOG.md)
 
+> **Version `v.260506`** — sensor readings and switching are reliable now on
+> both stock ESPEasy mega and RPiEasy. From this release on the project uses
+> **date-based version numbers** (`v.YYMMDD`); they sort chronologically and
+> avoid the "what does 0.3.1 even mean" semver guesswork.
+
 **Local-push integration of ESPEasy and RPiEasy nodes into Home Assistant —
 no MQTT, no cloud, no polling. Pure UDP via the native C013 peer-to-peer
 protocol.**
@@ -116,6 +121,30 @@ data:
 
 The mapping is stored in the config entry options and survives restarts.
 After that, toggles use `gpio,16,<state>` directly and succeed.
+
+### ESPEasy mega: trigger a relay via a rule (proven working)
+
+Stock ESPEasy mega doesn't accept arbitrary `gpio,…` from outside reliably,
+but it *does* react to events. The combo that works in practice:
+
+1. In *Settings → Devices & Services → ESPEasy P2P → Configure*, find the
+   row for the relay task (e.g. `Relay1`, value `cmd`) and put a command
+   template into the right-hand field:
+   ```
+   event,schluessel
+   ```
+2. On the ESPEasy node, under **Tools → Rules**, add:
+   ```
+   On schluessel do
+     GPIO,5,10
+     Publish,2,1
+     timerSet,2,4
+   endon
+   ```
+
+Toggling the switch in HA now sends `event,schluessel` over HTTP, the
+node's rule fires and pulses GPIO 5. The same pattern works for any
+ESPEasy command you want to wrap behind an event.
 
 ### Other failure modes
 
@@ -305,6 +334,30 @@ data:
 Das Mapping wird in den Optionen des Config Entries gespeichert und
 übersteht Neustarts. Danach werden Toggles direkt als `gpio,16,<state>`
 gesendet und funktionieren.
+
+### ESPEasy mega: Relais über eine Rule schalten (erprobt)
+
+Stock ESPEasy mega nimmt `gpio,…` von außen nicht zuverlässig an, reagiert
+aber auf Events. Die in der Praxis funktionierende Kombi:
+
+1. In *Einstellungen → Geräte & Dienste → ESPEasy P2P → Konfigurieren* in
+   der Zeile des Relay-Tasks (z. B. `Relay1`, Wert `cmd`) im rechten Feld
+   ein Command-Template eintragen:
+   ```
+   event,schluessel
+   ```
+2. Auf dem ESPEasy-Node unter **Tools → Rules**:
+   ```
+   On schluessel do
+     GPIO,5,10
+     Publish,2,1
+     timerSet,2,4
+   endon
+   ```
+
+Beim Schalten in HA wird `event,schluessel` per HTTP an den Node geschickt,
+die Rule feuert und pulst GPIO 5. Das Schema funktioniert für jeden
+ESPEasy-Befehl, den man hinter einem Event verstecken will.
 
 ### Weitere Fehlerquellen
 
