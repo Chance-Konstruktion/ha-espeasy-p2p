@@ -16,6 +16,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .const import (
     ANNOUNCE_INTERVAL,
     BROADCAST_UNIT,
+    CONF_COMMAND_MAP,
     CONF_GPIO_PIN_MAP,
     DOMAIN,
     HA_BUILD,
@@ -50,6 +51,7 @@ class ESPEasyP2PCoordinator:
         unit: int,
         name: str,
         pin_overrides: dict[str, int] | None = None,
+        command_overrides: dict[str, str] | None = None,
     ) -> None:
         self.hass = hass
         self.entry_id = entry_id
@@ -63,6 +65,10 @@ class ESPEasyP2PCoordinator:
         # User-supplied "<unit>/<taskname>" -> GPIO pin overrides. Used when
         # the firmware (notably RPiEasy) does not expose the pin via /json.
         self.pin_overrides: dict[str, int] = dict(pin_overrides or {})
+        # User-supplied "<unit>/<taskname>" -> raw command template. When
+        # set, this replaces the default gpio,/<taskname>, dispatch logic.
+        # `{state}` in the template is substituted with 0 or 1.
+        self.command_overrides: dict[str, str] = dict(command_overrides or {})
         self._transport: asyncio.DatagramTransport | None = None
         self._announce_task: asyncio.Task | None = None
         # Track which node IPs we've already fetched task metadata from so
@@ -87,6 +93,22 @@ class ESPEasyP2PCoordinator:
             if u == unit and task.task_name == task_name:
                 return idx
         return -1
+
+    def get_command_template(self, unit: int, task_name: str) -> str | None:
+        """Return the user-defined raw command template for a task, or None."""
+        if not task_name:
+            return None
+        tpl = self.command_overrides.get(f"{unit}/{task_name}")
+        return tpl or None
+
+    def set_command_override(
+        self, unit: int, task_name: str, template: str
+    ) -> None:
+        key = f"{unit}/{task_name}"
+        if template:
+            self.command_overrides[key] = template
+        else:
+            self.command_overrides.pop(key, None)
 
     def set_pin_override(self, unit: int, task_name: str, pin: int) -> None:
         """Persist a GPIO pin override for a (unit, task_name)."""

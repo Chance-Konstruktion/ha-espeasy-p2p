@@ -9,6 +9,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import (
+    CONF_COMMAND_MAP,
     CONF_GPIO_PIN_MAP,
     CONF_NAME,
     CONF_PORT,
@@ -50,8 +51,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         _LOGGER.info("Backfilled missing config entry data with defaults")
     pin_overrides = dict(entry.options.get(CONF_GPIO_PIN_MAP, {}))
+    command_overrides = dict(entry.options.get(CONF_COMMAND_MAP, {}))
     coordinator = ESPEasyP2PCoordinator(
-        hass, entry.entry_id, port, unit, name, pin_overrides=pin_overrides
+        hass,
+        entry.entry_id,
+        port,
+        unit,
+        name,
+        pin_overrides=pin_overrides,
+        command_overrides=command_overrides,
     )
     try:
         await coordinator.async_start()

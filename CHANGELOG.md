@@ -9,6 +9,16 @@ All notable changes to this integration are documented here. Dates use
 - **Options flow for the GPIO pin map**: edit pin assignments via
   *Settings → Devices & Services → ESPEasy P2P → Configure*. One row per
   discovered switch task; clearing a row removes the override.
+- **Per-task command template**: a second optional field next to each
+  pin lets you send arbitrary commands like `event,door={state}` for
+  Output Helper / Domoticz Helper tasks that don't drive a GPIO directly.
+  `{state}` is replaced with `0` or `1`. When set, the template
+  overrides the default `gpio,…` / `<taskname>,…` dispatch.
+
+### Fixed
+- Options flow returned 500 Internal Server Error because the schema
+  used `vol.Any(...)` which HA's JSON encoder cannot serialize. Replaced
+  with `NumberSelector`.
 
 ## 2026-05-05
 

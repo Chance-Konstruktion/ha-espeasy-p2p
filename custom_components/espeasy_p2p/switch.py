@@ -166,18 +166,26 @@ class ESPEasyP2PSwitch(SwitchEntity):
         task = self._coordinator.tasks.get((self._src_unit, self._task_index))
         task_name = (task.task_name if task else "") or f"task{self._task_index}"
         gpio_pin = self._coordinator.get_gpio_pin(self._src_unit, task_name)
+        template = self._coordinator.get_command_template(
+            self._src_unit, task_name
+        )
 
         # Build the candidate commands. We try them in order until one
         # returns HTTP 200 with a body that looks like a real success.
+        # - User-supplied template wins over everything: it's an explicit
+        #   instruction and falling back would mask their intent.
         # - "gpio,<pin>,<state>" works for "Switch input"/"Output Helper"
         #   tasks (the most common setup with relays/pumps). RPiEasy needs
         #   this form: it answers <taskname>,<state> with body 'False'.
         # - "<taskname>,<state>" works for plugins like "Generic Dummy"
         #   or "Output - PWM Motor" that respond to their task name.
         candidates: list[str] = []
-        if gpio_pin is not None:
-            candidates.append(f"gpio,{gpio_pin},{state}")
-        candidates.append(f"{task_name},{state}")
+        if template:
+            candidates.append(_render_template(template, state))
+        else:
+            if gpio_pin is not None:
+                candidates.append(f"gpio,{gpio_pin},{state}")
+            candidates.append(f"{task_name},{state}")
 
         # Fire-and-forget P2P (RPiEasy accepts type-0; stock ESPEasy ignores).
         for cmd in candidates:
@@ -209,13 +217,20 @@ class ESPEasyP2PSwitch(SwitchEntity):
             success, last_cmd, last_status, last_body,
         )
         if not success:
-            if gpio_pin is None:
+            if template:
+                _LOGGER.warning(
+                    "Switch %r on unit %d: custom command template %r "
+                    "was rejected by the node (last body: %r). Edit it in "
+                    "the integration's options.",
+                    task_name, self._src_unit, template, last_body,
+                )
+            elif gpio_pin is None:
                 _LOGGER.warning(
                     "Switch %r on unit %d has no known GPIO pin and the "
-                    "node rejected the task-name command. Call service "
-                    "espeasy_p2p.set_gpio_pin with unit=%d task_name=%r "
-                    "pin=<bcm-pin> to fix this permanently.",
-                    task_name, self._src_unit, self._src_unit, task_name,
+                    "node rejected the task-name command. Open the "
+                    "integration's options to set a pin or a custom "
+                    "command template (e.g. event,%s={state}).",
+                    task_name, self._src_unit, task_name,
                 )
             # Don't update local state — the relay didn't actually move.
             self.async_write_ha_state()
@@ -226,6 +241,15 @@ class ESPEasyP2PSwitch(SwitchEntity):
         values[self._value_index] = float(state)
         self._coordinator.values[(self._src_unit, self._task_index)] = values
         self.async_write_ha_state()
+
+
+def _render_template(template: str, state: int) -> str:
+    """Render a command template by substituting the state placeholder.
+
+    Supports `{state}` (lowercase) and `{STATE}`. Anything else is left
+    untouched so users can still pass commands containing literal braces.
+    """
+    return template.replace("{state}", str(state)).replace("{STATE}", str(state))
 
 
 def _looks_like_success(body: str) -> bool:
