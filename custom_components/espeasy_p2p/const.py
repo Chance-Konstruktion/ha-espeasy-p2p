@@ -45,8 +45,11 @@ NODE_OFFLINE_TIMEOUT = 120
 NODE_AGING_INTERVAL = 30
 
 SIGNAL_NODE_DISCOVERED = f"{DOMAIN}_node_discovered"
+SIGNAL_NODE_REMOVED = f"{DOMAIN}_node_removed"
 SIGNAL_TASK_DISCOVERED = f"{DOMAIN}_task_discovered"
 SIGNAL_VALUE_UPDATED = f"{DOMAIN}_value_updated"
+# Fired when a node's online/offline status changes (aging).
+SIGNAL_NODE_AVAILABILITY = f"{DOMAIN}_node_availability"
 
 NODE_TYPE_NAMES = {
     1: "ESP Easy",

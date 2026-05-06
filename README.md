@@ -214,8 +214,9 @@ broadcast hello. Reachable nodes will respond within a second or two.
   to its task name; for RPiEasy `Output Helper` you have to register the
   pin once via `espeasy_p2p.set_gpio_pin` —
   see [Switching limitations](#switching-limitations).
-- No node-timeout / aging logic — entities stay `available` once values
-  have been seen.
+- Node aging: entities go `unavailable` after 120 s of silence and
+  recover automatically when traffic resumes. Use the
+  `espeasy_p2p.remove_node` service to permanently forget a unit.
 
 ---
 
@@ -429,5 +430,7 @@ Broadcast-Hello. Erreichbare Nodes antworten in 1–2 Sekunden.
   seinen Task-Namen versteht; bei RPiEasy `Output Helper` muss der Pin
   einmalig via `espeasy_p2p.set_gpio_pin` registriert werden — siehe
   [Schalt-Einschränkungen](#schalt-einschränkungen).
-- Keine Node-Timeout-/Aging-Logik — Entities bleiben auf `available`,
-  sobald einmal Werte gekommen sind.
+- Node-Aging: Entities werden nach 120 s ohne Pakete `unavailable` und
+  kommen automatisch wieder, sobald wieder Traffic eintrifft. Mit dem
+  Service `espeasy_p2p.remove_node` kann eine Unit dauerhaft entfernt
+  werden.

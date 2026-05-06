@@ -22,6 +22,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DOMAIN,
+    SIGNAL_NODE_AVAILABILITY,
     SIGNAL_TASK_DISCOVERED,
     SIGNAL_VALUE_UPDATED,
     SWITCH_VALUE_NAMES,
@@ -144,6 +145,18 @@ class ESPEasyP2PValueSensor(SensorEntity):
                 self._handle_task_update,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SIGNAL_NODE_AVAILABILITY}_{self._entry_id}",
+                self._handle_availability,
+            )
+        )
+
+    @callback
+    def _handle_availability(self, unit: int) -> None:
+        if unit == self._src_unit:
+            self.async_write_ha_state()
 
     @callback
     def _handle_update(self, payload: TaskValues) -> None:
@@ -196,6 +209,8 @@ class ESPEasyP2PValueSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
+        if not self._coordinator.is_unit_online(self._src_unit):
+            return False
         return (self._src_unit, self._task_index) in self._coordinator.values
 
 
