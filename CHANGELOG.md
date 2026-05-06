@@ -1,7 +1,24 @@
 # Changelog
 
 All notable changes to this integration are documented here. Dates use
-`YYYY-MM-DD`.
+`YYYY-MM-DD`. Starting with `260506`, the integration uses **date-based
+version numbers** (`YYMMDD`) instead of semver — they sort chronologically
+and the release date is obvious at a glance.
+
+## 260506
+
+### Added
+- Documented the proven **`event,<name>` + ESPEasy rule** pattern for
+  switching relays from HA on stock ESPEasy mega. See README.
+
+### Fixed
+- Options-flow description triggered `Translation error: UNCLOSED_TAG` in
+  the HA frontend because it contained `<pin>` / `<state>` (parsed as
+  HTML tags). Replaced with safe placeholders and `{state}` is now passed
+  as a literal description placeholder.
+
+### Changed
+- Switched to date-based version numbers (`YYMMDD`).
 
 ## [Unreleased]
 
