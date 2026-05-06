@@ -27,6 +27,7 @@ from .const import (
     SWITCH_VALUE_NAMES,
 )
 from .coordinator import ESPEasyP2PCoordinator
+from .entity_classification import classify_switch
 from .protocol import TaskConfig, TaskValues
 
 _LOGGER = logging.getLogger(__name__)
@@ -139,6 +140,22 @@ class ESPEasyP2PSwitch(SwitchEntity):
         if task and task.task_name:
             return task.task_name
         return f"Task {self._task_index}"
+
+    @property
+    def device_class(self):
+        return self._presentation().device_class
+
+    @property
+    def icon(self) -> str | None:
+        return self._presentation().icon
+
+    def _presentation(self):
+        task = self._coordinator.tasks.get((self._src_unit, self._task_index))
+        task_name = task.task_name if task else ""
+        value_name = ""
+        if task and 0 <= self._value_index < len(task.value_names):
+            value_name = task.value_names[self._value_index]
+        return classify_switch(task_name, value_name)
 
     @property
     def is_on(self) -> bool | None:
