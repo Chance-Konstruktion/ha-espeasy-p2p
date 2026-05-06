@@ -10,12 +10,22 @@ and the release date is obvious at a glance.
 ### Added
 - Documented the proven **`event,<name>` + ESPEasy rule** pattern for
   switching relays from HA on stock ESPEasy mega. See README.
+- **Two-step options flow**: pick a task from a list, edit just its pin
+  and command-template fields with proper translatable labels, then loop
+  back or "Save and close". Replaces the flat N×2 form.
+- **Node aging**: entities go `unavailable` when a node has not sent any
+  Type-1 / Type-5 packet for 120 s and recover automatically when traffic
+  resumes. Powered-off nodes no longer show their last value forever.
+- **`espeasy_p2p.remove_node`** service: forget a node and remove its HA
+  device + entities. Useful after retiring a unit or changing its number.
 
 ### Fixed
 - Options-flow description triggered `Translation error: UNCLOSED_TAG` in
   the HA frontend because it contained `<pin>` / `<state>` (parsed as
   HTML tags). Replaced with safe placeholders and `{state}` is now passed
   as a literal description placeholder.
+- Manifest had a typo in `documentation` and `issue_tracker`
+  (`ha-p2p-espeays`). Now points at the real repo and lists a codeowner.
 
 ### Changed
 - Switched to date-based version numbers (`YYMMDD`).

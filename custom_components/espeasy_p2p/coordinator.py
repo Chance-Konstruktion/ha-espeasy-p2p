@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 import aiohttp
 
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -22,7 +23,11 @@ from .const import (
     HA_BUILD,
     HA_NODE_TYPE,
     HA_VERSION,
+    NODE_AGING_INTERVAL,
+    NODE_OFFLINE_TIMEOUT,
+    SIGNAL_NODE_AVAILABILITY,
     SIGNAL_NODE_DISCOVERED,
+    SIGNAL_NODE_REMOVED,
     SIGNAL_TASK_DISCOVERED,
     SIGNAL_VALUE_UPDATED,
 )
@@ -62,6 +67,14 @@ class ESPEasyP2PCoordinator:
         self.nodes: dict[int, NodeInfo] = {}
         self.tasks: dict[tuple[int, int], TaskConfig] = {}
         self.values: dict[tuple[int, int], list[float]] = {}
+        # Last monotonic timestamp at which we saw any traffic (Type-1 or
+        # Type-5) from each unit. Drives the `available` property of all
+        # entities so a powered-off node correctly fades to "unavailable".
+        self.last_seen: dict[int, float] = {}
+        # Units currently considered offline (last_seen older than the
+        # timeout). Tracked separately so we only fire availability signals
+        # on transitions, not on every periodic check.
+        self._offline: set[int] = set()
         # User-supplied "<unit>/<taskname>" -> GPIO pin overrides. Used when
         # the firmware (notably RPiEasy) does not expose the pin via /json.
         self.pin_overrides: dict[str, int] = dict(pin_overrides or {})
@@ -71,6 +84,7 @@ class ESPEasyP2PCoordinator:
         self.command_overrides: dict[str, str] = dict(command_overrides or {})
         self._transport: asyncio.DatagramTransport | None = None
         self._announce_task: asyncio.Task | None = None
+        self._aging_task: asyncio.Task | None = None
         # Track which node IPs we've already fetched task metadata from so
         # we don't re-poll on every periodic Type-1 heartbeat.
         self._fetched_meta_for: set[str] = set()
@@ -147,11 +161,14 @@ class ESPEasyP2PCoordinator:
         # Kick off active discovery and start periodic announce loop.
         self.async_scan()
         self._announce_task = self.hass.loop.create_task(self._announce_loop())
+        self._aging_task = self.hass.loop.create_task(self._aging_loop())
 
     async def async_stop(self) -> None:
-        if self._announce_task is not None:
-            self._announce_task.cancel()
-            self._announce_task = None
+        for task_attr in ("_announce_task", "_aging_task"):
+            task = getattr(self, task_attr)
+            if task is not None:
+                task.cancel()
+                setattr(self, task_attr, None)
         if self._transport is not None:
             self._transport.close()
             self._transport = None
@@ -194,6 +211,51 @@ class ESPEasyP2PCoordinator:
         except asyncio.CancelledError:
             pass
 
+    async def _aging_loop(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(NODE_AGING_INTERVAL)
+                self._evaluate_availability()
+        except asyncio.CancelledError:
+            pass
+
+    def _evaluate_availability(self) -> None:
+        """Mark nodes offline when their last_seen exceeds the timeout."""
+        now = time.monotonic()
+        changed: list[int] = []
+        for unit, ts in list(self.last_seen.items()):
+            stale = (now - ts) > NODE_OFFLINE_TIMEOUT
+            was_offline = unit in self._offline
+            if stale and not was_offline:
+                self._offline.add(unit)
+                changed.append(unit)
+                _LOGGER.info(
+                    "Node unit=%d offline (no packets for %.0fs)", unit, now - ts
+                )
+            elif not stale and was_offline:
+                self._offline.discard(unit)
+                changed.append(unit)
+                _LOGGER.info("Node unit=%d back online", unit)
+        for unit in changed:
+            async_dispatcher_send(
+                self.hass, self._signal(SIGNAL_NODE_AVAILABILITY), unit
+            )
+
+    def is_unit_online(self, unit: int) -> bool:
+        if unit not in self.last_seen:
+            return False
+        return unit not in self._offline
+
+    def _touch(self, unit: int) -> None:
+        """Record activity from a unit and fire an availability signal if it
+        just transitioned back online."""
+        self.last_seen[unit] = time.monotonic()
+        if unit in self._offline:
+            self._offline.discard(unit)
+            async_dispatcher_send(
+                self.hass, self._signal(SIGNAL_NODE_AVAILABILITY), unit
+            )
+
     def _signal(self, base: str) -> str:
         return f"{base}_{self.entry_id}"
 
@@ -204,6 +266,7 @@ class ESPEasyP2PCoordinator:
             return
         existing = self.nodes.get(node.unit)
         self.nodes[node.unit] = node
+        self._touch(node.unit)
         # Always refresh the HA device entry — entities may have been created
         # with placeholder metadata before the first Type-1 arrived. Wrap
         # defensively: a failure here must not break node discovery for the
@@ -423,6 +486,7 @@ class ESPEasyP2PCoordinator:
             return
         key = (src_unit, payload.task_index)
         self.values[key] = payload.values
+        self._touch(src_unit)
         # Track that this (unit, task) is alive even before we know the
         # real names. We deliberately do NOT create entities here from a
         # placeholder TaskConfig — the user does not want phantom "Task X
@@ -506,6 +570,42 @@ class ESPEasyP2PCoordinator:
         except OSError as err:
             _LOGGER.debug("UDP command to %s failed: %s", ip, err)
             return False
+
+    async def async_remove_node(self, unit: int) -> bool:
+        """Forget a node: drop in-memory state and remove its HA device.
+
+        Entities for the node disappear because the device they were attached
+        to is gone. The node will reappear automatically if it sends a fresh
+        Type-1 heartbeat afterwards.
+        """
+        if unit not in self.nodes and not any(
+            u == unit for (u, _) in self.tasks
+        ):
+            _LOGGER.warning("remove_node: unit %d not known", unit)
+            return False
+        node = self.nodes.pop(unit, None)
+        for key in [k for k in list(self.tasks) if k[0] == unit]:
+            self.tasks.pop(key, None)
+            self.values.pop(key, None)
+        self.last_seen.pop(unit, None)
+        self._offline.discard(unit)
+        if node is not None and node.ip:
+            self._fetched_meta_for.discard(node.ip)
+        # Remove the device entry — HA will tear down its child entities.
+        registry = dr.async_get(self.hass)
+        device = registry.async_get_device(
+            identifiers={(DOMAIN, f"unit-{unit}")}
+        )
+        if device is not None:
+            ent_reg = er.async_get(self.hass)
+            for ent in er.async_entries_for_device(
+                ent_reg, device.id, include_disabled_entities=True
+            ):
+                ent_reg.async_remove(ent.entity_id)
+            registry.async_remove_device(device.id)
+        async_dispatcher_send(self.hass, self._signal(SIGNAL_NODE_REMOVED), unit)
+        _LOGGER.info("Removed node unit=%d", unit)
+        return True
 
     def diagnostics(self) -> dict[str, Any]:
         return {

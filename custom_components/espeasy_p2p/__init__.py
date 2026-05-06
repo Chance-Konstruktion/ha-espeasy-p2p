@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_UNIT,
     DOMAIN,
     SERVICE_REFETCH_METADATA,
+    SERVICE_REMOVE_NODE,
     SERVICE_SCAN,
     SERVICE_SEND_COMMAND,
     SERVICE_SET_GPIO_PIN,
@@ -111,6 +112,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
             _LOGGER.warning("set_gpio_pin: unit %d not found", unit)
 
+        async def _handle_remove_node(call: ServiceCall) -> None:
+            unit = int(call.data["unit"])
+            for c in hass.data.get(DOMAIN, {}).values():
+                if await c.async_remove_node(unit):
+                    return
+            _LOGGER.warning("remove_node: unit %d not found", unit)
+
         hass.services.async_register(DOMAIN, SERVICE_SCAN, _handle_scan)
         hass.services.async_register(
             DOMAIN, SERVICE_REFETCH_METADATA, _handle_refetch
@@ -120,6 +128,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         hass.services.async_register(
             DOMAIN, SERVICE_SET_GPIO_PIN, _handle_set_gpio_pin
+        )
+        hass.services.async_register(
+            DOMAIN, SERVICE_REMOVE_NODE, _handle_remove_node
         )
 
     return True
@@ -138,4 +149,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_REFETCH_METADATA)
         hass.services.async_remove(DOMAIN, SERVICE_SEND_COMMAND)
         hass.services.async_remove(DOMAIN, SERVICE_SET_GPIO_PIN)
+        hass.services.async_remove(DOMAIN, SERVICE_REMOVE_NODE)
     return unload_ok

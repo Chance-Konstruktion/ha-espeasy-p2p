@@ -18,8 +18,20 @@
   "options": {
     "step": {
       "init": {
-        "title": "GPIO pin map",
-        "description": "For each switch-eligible task you can either set a BCM GPIO pin (the integration will send 'gpio,PIN,STATE'), or — for Output Helper / Domoticz Helper tasks that have no pin — provide a command template. The template is sent verbatim with the placeholder {state} replaced by 0 or 1. Examples: 'event,door={state}' to trigger an ESPEasy rule, or 'door,{state}' to set the helper directly. Leave both fields empty to remove an entry. {task_count} task(s) discovered."
+        "title": "Switch configuration",
+        "description": "Pick a task to set its GPIO pin or command template, or choose 'Save and close' when you are done. {task_count} task(s) listed.",
+        "data": {
+          "task": "Task"
+        }
+      },
+      "edit": {
+        "title": "Edit '{task}' on unit {unit}",
+        "description": "Set the BCM GPIO pin (the integration sends 'gpio,PIN,STATE'), or a command template — useful for stock ESPEasy with rules. Examples:\n\n• Stock ESPEasy + rule: 'event,schluessel' triggers 'On schluessel do … endon' on the node.\n• Direct helper: 'door,{state}' (the placeholder {state} is replaced with 0 or 1).\n\nIf both fields are filled, the template wins. Tick 'Remove this entry' to delete the override entirely.",
+        "data": {
+          "pin": "BCM GPIO pin (optional)",
+          "cmd": "Command template (optional)",
+          "remove": "Remove this entry"
+        }
       }
     },
     "abort": {
@@ -30,6 +42,16 @@
     "scan": {
       "name": "Scan for nodes",
       "description": "Broadcast a node-info packet so all reachable ESPEasy nodes immediately announce themselves."
+    },
+    "remove_node": {
+      "name": "Remove node",
+      "description": "Forget a node and remove its HA device, sensors and switches. The node will reappear if it sends a new heartbeat.",
+      "fields": {
+        "unit": {
+          "name": "Unit",
+          "description": "ESPEasy unit number to forget."
+        }
+      }
     }
   }
 }
