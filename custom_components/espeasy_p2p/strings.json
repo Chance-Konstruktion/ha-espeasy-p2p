@@ -19,7 +19,7 @@
     "step": {
       "init": {
         "title": "GPIO pin map",
-        "description": "Assign a BCM GPIO pin to each switch-eligible task. Required for RPiEasy 'Output Helper' tasks because the firmware does not expose the pin in /json. Leave empty to remove an entry. {task_count} task(s) discovered."
+        "description": "For each switch-eligible task you can either set a BCM GPIO pin (the integration will send 'gpio,<pin>,<state>'), or — for Output Helper / Domoticz Helper tasks that have no pin — provide a command template. The template is sent verbatim with '{state}' replaced by 0 or 1. Examples: 'event,door={state}' to trigger an ESPEasy rule, or 'door,{state}' to set the helper directly. Leave both fields empty to remove an entry. {task_count} task(s) discovered."
       }
     },
     "abort": {

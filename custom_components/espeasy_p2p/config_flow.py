@@ -20,6 +20,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_COMMAND_MAP,
     CONF_GPIO_PIN_MAP,
     CONF_NAME,
     CONF_PORT,
@@ -74,27 +75,35 @@ class ESPEasyP2PConfigFlow(ConfigFlow, domain=DOMAIN):
         return ESPEasyP2POptionsFlow(entry)
 
 
-# Form fields are named "<task_name>__u<unit>" so the HA UI shows the task
-# name (with the unit number as a suffix when multiple nodes are present),
-# while we can still round-trip them back to the "<unit>/<task_name>" keys
-# stored in the options dict.
+# Form fields are named "<task_name>__u<unit>" for the GPIO pin and
+# "<task_name>__u<unit>__cmd" for the command template, so the HA UI shows
+# readable labels and we can still round-trip them back to the
+# "<unit>/<task_name>" keys stored in the options dict.
 _FIELD_SEP = "__u"
+_CMD_SUFFIX = "__cmd"
 
 
-def _field_for(unit: int, task_name: str) -> str:
+def _pin_field_for(unit: int, task_name: str) -> str:
     return f"{task_name}{_FIELD_SEP}{unit}"
 
 
-def _parse_field(field: str) -> tuple[int, str] | None:
-    idx = field.rfind(_FIELD_SEP)
+def _cmd_field_for(unit: int, task_name: str) -> str:
+    return f"{task_name}{_FIELD_SEP}{unit}{_CMD_SUFFIX}"
+
+
+def _parse_field(field: str) -> tuple[int, str, bool] | None:
+    """Return (unit, task_name, is_cmd) or None if the field is unrelated."""
+    is_cmd = field.endswith(_CMD_SUFFIX)
+    base = field[: -len(_CMD_SUFFIX)] if is_cmd else field
+    idx = base.rfind(_FIELD_SEP)
     if idx < 0:
         return None
-    task_name = field[:idx]
+    task_name = base[:idx]
     try:
-        unit = int(field[idx + len(_FIELD_SEP) :])
+        unit = int(base[idx + len(_FIELD_SEP) :])
     except ValueError:
         return None
-    return unit, task_name
+    return unit, task_name, is_cmd
 
 
 class ESPEasyP2POptionsFlow(OptionsFlow):
@@ -120,33 +129,50 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
                 switch_tasks.append((unit, task.task_name))
         switch_tasks.sort()
 
-        current_map: dict[str, int] = dict(
+        current_pins: dict[str, int] = dict(
             self._entry.options.get(CONF_GPIO_PIN_MAP, {})
+        )
+        current_cmds: dict[str, str] = dict(
+            self._entry.options.get(CONF_COMMAND_MAP, {})
         )
 
         if user_input is not None:
-            new_map: dict[str, int] = {}
+            new_pins: dict[str, int] = {}
+            new_cmds: dict[str, str] = {}
             for field, value in user_input.items():
                 parsed = _parse_field(field)
                 if parsed is None or value is None:
                     continue
-                unit, task_name = parsed
-                try:
-                    pin = int(value)
-                except (TypeError, ValueError):
-                    continue
-                if pin < 0:
-                    continue
-                new_map[f"{unit}/{task_name}"] = pin
-                if coordinator is not None:
-                    coordinator.set_pin_override(unit, task_name, pin)
-            # Replace the live override dict so cleared fields take effect
-            # immediately, not just on the next restart.
+                unit, task_name, is_cmd = parsed
+                key = f"{unit}/{task_name}"
+                if is_cmd:
+                    template = str(value).strip()
+                    if not template:
+                        continue
+                    new_cmds[key] = template
+                    if coordinator is not None:
+                        coordinator.set_command_override(unit, task_name, template)
+                else:
+                    try:
+                        pin = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if pin < 0:
+                        continue
+                    new_pins[key] = pin
+                    if coordinator is not None:
+                        coordinator.set_pin_override(unit, task_name, pin)
+            # Replace the live override dicts wholesale so cleared fields
+            # take effect immediately, not just after a restart.
             if coordinator is not None:
-                coordinator.pin_overrides = dict(new_map)
+                coordinator.pin_overrides = dict(new_pins)
+                coordinator.command_overrides = dict(new_cmds)
             return self.async_create_entry(
                 title="",
-                data={CONF_GPIO_PIN_MAP: new_map},
+                data={
+                    CONF_GPIO_PIN_MAP: new_pins,
+                    CONF_COMMAND_MAP: new_cmds,
+                },
             )
 
         if not switch_tasks:
@@ -157,16 +183,25 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
         )
         schema_dict: dict[Any, Any] = {}
         for unit, task_name in switch_tasks:
-            field = _field_for(unit, task_name)
-            default = current_map.get(f"{unit}/{task_name}")
+            key = f"{unit}/{task_name}"
+            pin_default = current_pins.get(key)
+            cmd_default = current_cmds.get(key)
             schema_dict[
                 vol.Optional(
-                    field,
-                    description={"suggested_value": default}
-                    if default is not None
+                    _pin_field_for(unit, task_name),
+                    description={"suggested_value": pin_default}
+                    if pin_default is not None
                     else None,
                 )
             ] = pin_selector
+            schema_dict[
+                vol.Optional(
+                    _cmd_field_for(unit, task_name),
+                    description={"suggested_value": cmd_default}
+                    if cmd_default
+                    else None,
+                )
+            ] = str
 
         return self.async_show_form(
             step_id="init",

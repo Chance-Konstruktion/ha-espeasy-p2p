@@ -19,7 +19,7 @@
     "step": {
       "init": {
         "title": "GPIO-Pin-Zuordnung",
-        "description": "Weise jedem schaltbaren Task einen BCM-GPIO-Pin zu. Bei RPiEasy 'Output Helper' nötig, weil die Firmware den Pin nicht über /json ausliefert. Feld leer lassen, um einen Eintrag zu entfernen. {task_count} Task(s) erkannt."
+        "description": "Pro Task entweder einen BCM-GPIO-Pin setzen (es wird 'gpio,<pin>,<state>' gesendet) oder — für Output-Helper / Domoticz-Helper ohne Pin — ein Command-Template angeben. Das Template wird unverändert gesendet, '{state}' wird durch 0/1 ersetzt. Beispiele: 'event,door={state}' um eine ESPEasy-Regel zu triggern, oder 'door,{state}' um den Helper direkt zu setzen. Beide Felder leer lassen entfernt den Eintrag. {task_count} Task(s) erkannt."
       }
     },
     "abort": {
