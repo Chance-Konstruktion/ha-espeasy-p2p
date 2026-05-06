@@ -24,11 +24,13 @@ protocol.**
 | Sensor values (push from node → HA)    | ✅ working                             |
 | Switch entities (HA → node)            | ✅ working (RPiEasy needs one-time pin map) |
 
-**Right now this integration is reliable for reading sensor values only.**
+**Sensor values work very reliably. Switching works well with the provided
+tools** — GPIO pin mapping for RPiEasy `Output Helper` and per-task
+command templates (e.g. `event,<name>` rules) for stock ESPEasy mega.
 Switch entities are exposed for tasks whose value is named `State`,
-`Output`, `Relay` or `Switch`, but actually toggling a node from Home
-Assistant only succeeds for a small subset of plugin/firmware combinations
-(see [Switching limitations](#switching-limitations) below).
+`Output`, `Relay` or `Switch`; see
+[Switching limitations](#switching-limitations) below for the workarounds
+per firmware.
 
 ## How the data flow works
 
