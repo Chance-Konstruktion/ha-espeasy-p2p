@@ -55,6 +55,14 @@ task config.
 - One sensor entity per task value (up to four per task), with up to three
   decimal places of display precision
 - Each ESPEasy unit appears as a single HA device with a link to its web UI
+- **Node aging** (since `v.260506`): entities go `unavailable` after 120 s
+  of silence and recover automatically when traffic resumes — no more
+  stale "last value forever" after a node powers off
+- **`espeasy_p2p.remove_node`** service to permanently forget a unit
+  (removes its HA device and entities) after retiring it or changing its
+  unit number
+- **Two-step options flow**: pick a switch task from a list and edit just
+  its GPIO pin and command-template fields, instead of one giant N×2 form
 
 ## Installation via HACS
 
@@ -266,6 +274,15 @@ sendet, erscheinen die Entities automatisch.
 - Eine Sensor-Entity je Task-Wert (bis zu vier pro Task), Anzeige mit bis
   zu drei Nachkommastellen
 - Jede ESPEasy-Unit erscheint als eigenes HA-Gerät mit Link auf die Web-UI
+- **Node-Aging** (seit `v.260506`): Entities werden nach 120 s Funkstille
+  `unavailable` und kommen automatisch zurück, sobald wieder Pakete
+  eintreffen — keine "ewig letzten Werte" mehr nach Stromausfall am Node
+- **`espeasy_p2p.remove_node`**-Service, um eine Unit dauerhaft zu
+  entfernen (HA-Gerät und Entities verschwinden) — praktisch nach dem
+  Stilllegen oder Umnummerieren eines Nodes
+- **Zweistufiger Options-Flow**: Switch-Task aus einer Liste wählen und
+  gezielt nur dessen GPIO-Pin und Command-Template bearbeiten, statt einer
+  riesigen N×2-Maske
 
 ## Installation via HACS
 
