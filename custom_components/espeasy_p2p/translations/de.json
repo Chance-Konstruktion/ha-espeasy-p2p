@@ -18,8 +18,20 @@
   "options": {
     "step": {
       "init": {
-        "title": "GPIO-Pin-Zuordnung",
-        "description": "Pro Task entweder einen BCM-GPIO-Pin setzen (es wird 'gpio,PIN,STATE' gesendet) oder — für Output-Helper / Domoticz-Helper ohne Pin — ein Command-Template angeben. Das Template wird unverändert gesendet, der Platzhalter {state} wird durch 0/1 ersetzt. Beispiele: 'event,door={state}' um eine ESPEasy-Regel zu triggern, oder 'door,{state}' um den Helper direkt zu setzen. Beide Felder leer lassen entfernt den Eintrag. {task_count} Task(s) erkannt."
+        "title": "Schalter-Konfiguration",
+        "description": "Task auswählen, um GPIO-Pin oder Command-Template zu setzen — oder 'Speichern und schließen' wählen, wenn alles passt. {task_count} Task(s) gelistet.",
+        "data": {
+          "task": "Task"
+        }
+      },
+      "edit": {
+        "title": "'{task}' auf Unit {unit} bearbeiten",
+        "description": "Entweder einen BCM-GPIO-Pin setzen (es wird 'gpio,PIN,STATE' geschickt) oder ein Command-Template — praktisch für Stock-ESPEasy mit Rules. Beispiele:\n\n• Stock ESPEasy + Rule: 'event,schluessel' triggert 'On schluessel do … endon' auf dem Node.\n• Direkter Helper: 'door,{state}' (der Platzhalter {state} wird durch 0/1 ersetzt).\n\nWenn beide Felder gefüllt sind, gewinnt das Template. 'Eintrag entfernen' anhaken löscht die Override komplett.",
+        "data": {
+          "pin": "BCM-GPIO-Pin (optional)",
+          "cmd": "Command-Template (optional)",
+          "remove": "Eintrag entfernen"
+        }
       }
     },
     "abort": {
@@ -30,6 +42,16 @@
     "scan": {
       "name": "Knoten suchen",
       "description": "Sendet ein Node-Info-Paket per Broadcast, damit alle ESPEasy-Knoten sich sofort melden."
+    },
+    "remove_node": {
+      "name": "Knoten entfernen",
+      "description": "Vergisst einen Knoten und entfernt das HA-Gerät, seine Sensoren und Schalter. Der Knoten taucht wieder auf, sobald er einen Heartbeat sendet.",
+      "fields": {
+        "unit": {
+          "name": "Unit",
+          "description": "Zu vergessende ESPEasy-Unit-Nummer."
+        }
+      }
     }
   }
 }

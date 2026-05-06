@@ -14,9 +14,16 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
 )
 
 from .const import (
@@ -75,48 +82,26 @@ class ESPEasyP2PConfigFlow(ConfigFlow, domain=DOMAIN):
         return ESPEasyP2POptionsFlow(entry)
 
 
-# Form fields are named "<task_name>__u<unit>" for the GPIO pin and
-# "<task_name>__u<unit>__cmd" for the command template, so the HA UI shows
-# readable labels and we can still round-trip them back to the
-# "<unit>/<task_name>" keys stored in the options dict.
-_FIELD_SEP = "__u"
-_CMD_SUFFIX = "__cmd"
-
-
-def _pin_field_for(unit: int, task_name: str) -> str:
-    return f"{task_name}{_FIELD_SEP}{unit}"
-
-
-def _cmd_field_for(unit: int, task_name: str) -> str:
-    return f"{task_name}{_FIELD_SEP}{unit}{_CMD_SUFFIX}"
-
-
-def _parse_field(field: str) -> tuple[int, str, bool] | None:
-    """Return (unit, task_name, is_cmd) or None if the field is unrelated."""
-    is_cmd = field.endswith(_CMD_SUFFIX)
-    base = field[: -len(_CMD_SUFFIX)] if is_cmd else field
-    idx = base.rfind(_FIELD_SEP)
-    if idx < 0:
-        return None
-    task_name = base[:idx]
-    try:
-        unit = int(base[idx + len(_FIELD_SEP) :])
-    except ValueError:
-        return None
-    return unit, task_name, is_cmd
+_SAVE_CHOICE = "__save__"
 
 
 class ESPEasyP2POptionsFlow(OptionsFlow):
-    """Edit the GPIO-pin map for switch-eligible tasks."""
+    """Edit GPIO-pin and command-template overrides per task.
+
+    Two-step flow: pick a task from the list, edit its pin / template, then
+    optionally pick another or save & close. Much friendlier than one giant
+    form with N×2 generic-looking fields.
+    """
 
     def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
+        self._pins: dict[str, int] = dict(entry.options.get(CONF_GPIO_PIN_MAP, {}))
+        self._cmds: dict[str, str] = dict(entry.options.get(CONF_COMMAND_MAP, {}))
+        self._editing: str | None = None
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    def _switch_tasks(self) -> list[tuple[int, str]]:
         coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
-        switch_tasks: list[tuple[int, str]] = []
+        out: list[tuple[int, str]] = []
         if coordinator is not None:
             for (unit, _idx), task in coordinator.tasks.items():
                 if not task.task_name:
@@ -126,88 +111,135 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
                     for v in task.value_names
                 ):
                     continue
-                switch_tasks.append((unit, task.task_name))
-        switch_tasks.sort()
+                out.append((unit, task.task_name))
+        out.sort()
+        return out
 
-        current_pins: dict[str, int] = dict(
-            self._entry.options.get(CONF_GPIO_PIN_MAP, {})
-        )
-        current_cmds: dict[str, str] = dict(
-            self._entry.options.get(CONF_COMMAND_MAP, {})
-        )
+    def _all_keys(self) -> list[str]:
+        """Discovered tasks plus orphan keys that still live in options."""
+        seen = {f"{u}/{n}" for u, n in self._switch_tasks()}
+        return sorted(seen | set(self._pins) | set(self._cmds))
 
-        if user_input is not None:
-            new_pins: dict[str, int] = {}
-            new_cmds: dict[str, str] = {}
-            for field, value in user_input.items():
-                parsed = _parse_field(field)
-                if parsed is None or value is None:
-                    continue
-                unit, task_name, is_cmd = parsed
-                key = f"{unit}/{task_name}"
-                if is_cmd:
-                    template = str(value).strip()
-                    if not template:
-                        continue
-                    new_cmds[key] = template
-                    if coordinator is not None:
-                        coordinator.set_command_override(unit, task_name, template)
-                else:
-                    try:
-                        pin = int(value)
-                    except (TypeError, ValueError):
-                        continue
-                    if pin < 0:
-                        continue
-                    new_pins[key] = pin
-                    if coordinator is not None:
-                        coordinator.set_pin_override(unit, task_name, pin)
-            # Replace the live override dicts wholesale so cleared fields
-            # take effect immediately, not just after a restart.
-            if coordinator is not None:
-                coordinator.pin_overrides = dict(new_pins)
-                coordinator.command_overrides = dict(new_cmds)
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_GPIO_PIN_MAP: new_pins,
-                    CONF_COMMAND_MAP: new_cmds,
-                },
-            )
-
-        if not switch_tasks:
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        keys = self._all_keys()
+        if not keys:
             return self.async_abort(reason="no_switch_tasks")
 
-        pin_selector = NumberSelector(
-            NumberSelectorConfig(min=0, max=40, step=1, mode=NumberSelectorMode.BOX)
-        )
-        schema_dict: dict[Any, Any] = {}
-        for unit, task_name in switch_tasks:
-            key = f"{unit}/{task_name}"
-            pin_default = current_pins.get(key)
-            cmd_default = current_cmds.get(key)
-            schema_dict[
-                vol.Optional(
-                    _pin_field_for(unit, task_name),
-                    description={"suggested_value": pin_default}
-                    if pin_default is not None
-                    else None,
-                )
-            ] = pin_selector
-            schema_dict[
-                vol.Optional(
-                    _cmd_field_for(unit, task_name),
-                    description={"suggested_value": cmd_default}
-                    if cmd_default
-                    else None,
-                )
-            ] = str
+        if user_input is not None:
+            choice = user_input.get("task")
+            if choice == _SAVE_CHOICE or not choice:
+                return self._save_and_close()
+            self._editing = choice
+            return await self.async_step_edit()
 
+        options: list[SelectOptionDict] = []
+        for key in keys:
+            unit_str, _, task_name = key.partition("/")
+            label = f"Unit {unit_str} · {task_name}"
+            extras: list[str] = []
+            pin = self._pins.get(key)
+            if pin is not None:
+                extras.append(f"pin {pin}")
+            cmd = self._cmds.get(key)
+            if cmd:
+                extras.append(f"cmd: {cmd}")
+            if extras:
+                label += "  —  " + ", ".join(extras)
+            options.append(SelectOptionDict(value=key, label=label))
+        options.append(
+            SelectOptionDict(value=_SAVE_CHOICE, label="Save and close")
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Required("task"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        mode=SelectSelectorMode.LIST,
+                        custom_value=False,
+                    )
+                ),
+            }
+        )
         return self.async_show_form(
             step_id="init",
+            data_schema=schema,
+            description_placeholders={"task_count": str(len(keys))},
+        )
+
+    async def async_step_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        key = self._editing
+        if key is None:
+            return await self.async_step_init()
+        unit_str, _, task_name = key.partition("/")
+
+        if user_input is not None:
+            if user_input.get("remove"):
+                self._pins.pop(key, None)
+                self._cmds.pop(key, None)
+            else:
+                pin_raw = user_input.get("pin")
+                if pin_raw is None or pin_raw == "":
+                    self._pins.pop(key, None)
+                else:
+                    try:
+                        self._pins[key] = int(pin_raw)
+                    except (TypeError, ValueError):
+                        pass
+                cmd_raw = (user_input.get("cmd") or "").strip()
+                if cmd_raw:
+                    self._cmds[key] = cmd_raw
+                else:
+                    self._cmds.pop(key, None)
+            self._editing = None
+            return await self.async_step_init()
+
+        pin_default = self._pins.get(key)
+        cmd_default = self._cmds.get(key, "")
+        schema_dict: dict[Any, Any] = {}
+        schema_dict[
+            vol.Optional(
+                "pin",
+                description={"suggested_value": pin_default}
+                if pin_default is not None
+                else None,
+            )
+        ] = NumberSelector(
+            NumberSelectorConfig(min=0, max=40, step=1, mode=NumberSelectorMode.BOX)
+        )
+        schema_dict[
+            vol.Optional(
+                "cmd",
+                description={"suggested_value": cmd_default}
+                if cmd_default
+                else None,
+            )
+        ] = TextSelector(TextSelectorConfig(multiline=False))
+        schema_dict[vol.Optional("remove", default=False)] = BooleanSelector()
+
+        return self.async_show_form(
+            step_id="edit",
             data_schema=vol.Schema(schema_dict),
             description_placeholders={
-                "task_count": str(len(switch_tasks)),
+                "task": task_name,
+                "unit": unit_str,
                 "state": "{state}",
+            },
+        )
+
+    def _save_and_close(self) -> ConfigFlowResult:
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+        if coordinator is not None:
+            coordinator.pin_overrides = dict(self._pins)
+            coordinator.command_overrides = dict(self._cmds)
+        return self.async_create_entry(
+            title="",
+            data={
+                CONF_GPIO_PIN_MAP: dict(self._pins),
+                CONF_COMMAND_MAP: dict(self._cmds),
             },
         )

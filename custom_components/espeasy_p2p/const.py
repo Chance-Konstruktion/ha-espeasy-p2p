@@ -16,6 +16,7 @@ SERVICE_SCAN = "scan"
 SERVICE_SEND_COMMAND = "send_command"
 SERVICE_REFETCH_METADATA = "refetch_metadata"
 SERVICE_SET_GPIO_PIN = "set_gpio_pin"
+SERVICE_REMOVE_NODE = "remove_node"
 
 CONF_GPIO_PIN_MAP = "gpio_pin_map"
 CONF_COMMAND_MAP = "command_map"
@@ -35,8 +36,13 @@ PACKET_TYPE_COMMAND = 0
 # real sender via the UDP source IP in that case.
 BROADCAST_UNIT = 255
 
-NODE_TIMEOUT_CYCLES = 10
 ANNOUNCE_INTERVAL = 30
+# A node is considered offline if no Type-1/Type-5 packet has arrived for
+# this many seconds (3 announce intervals + a safety margin). Affects
+# entity availability only — no state is dropped.
+NODE_OFFLINE_TIMEOUT = 120
+# How often we re-evaluate online/offline state.
+NODE_AGING_INTERVAL = 30
 
 SIGNAL_NODE_DISCOVERED = f"{DOMAIN}_node_discovered"
 SIGNAL_TASK_DISCOVERED = f"{DOMAIN}_task_discovered"
