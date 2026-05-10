@@ -125,7 +125,7 @@ fill in the BCM pin and save. Or, equivalently, call the service:
 service: espeasy_p2p.set_gpio_pin
 data:
   unit: 9
-  task_name: zirkulationpumpe
+  task_name: pump
   pin: 16
 ```
 
@@ -141,18 +141,18 @@ but it *does* react to events. The combo that works in practice:
    row for the relay task (e.g. `Relay1`, value `cmd`) and put a command
    template into the right-hand field:
    ```
-   event,schluessel
+   event,key
    ```
 2. On the ESPEasy node, under **Tools → Rules**, add:
    ```
-   On schluessel do
+   On key do
      GPIO,5,10
      Publish,2,1
      timerSet,2,4
    endon
    ```
 
-Toggling the switch in HA now sends `event,schluessel` over HTTP, the
+Toggling the switch in HA now sends `event,key` over HTTP, the
 node's rule fires and pulses GPIO 5. The same pattern works for any
 ESPEasy command you want to wrap behind an event.
 
@@ -166,7 +166,7 @@ ESPEasy command you want to wrap behind an event.
 If toggling does nothing, the INFO log line shows exactly why:
 
 ```
-Switch unit=9 task='pufferpumpe' pin=12 state=1 -> success=False last_cmd='gpio,12,1' http=400 body='Unknown command'
+Switch unit=9 task='pump' pin=12 state=1 -> success=False last_cmd='gpio,12,1' http=400 body='Unknown command'
 ```
 
 The `body=…` part is the node's verbatim response.
@@ -333,9 +333,9 @@ Body `False` und schaltet das Relais nicht. Seit Version 2026-05-05
 erkennt die Integration das und loggt:
 
 ```
-Switch 'zirkulationpumpe' on unit 9 has no known GPIO pin and the node
+Switch 'pump' on unit 9 has no known GPIO pin and the node
 rejected the task-name command. Call service espeasy_p2p.set_gpio_pin
-with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
+with unit=9 task_name='pump' pin=<bcm-pin> to fix this
 permanently.
 ```
 
@@ -347,7 +347,7 @@ BCM-Pin eintragen und speichern. Alternativ über den Service:
 service: espeasy_p2p.set_gpio_pin
 data:
   unit: 9
-  task_name: zirkulationpumpe
+  task_name: pump
   pin: 16
 ```
 
@@ -364,7 +364,7 @@ aber auf Events. Die in der Praxis funktionierende Kombi:
    der Zeile des Relay-Tasks (z. B. `Relay1`, Wert `cmd`) im rechten Feld
    ein Command-Template eintragen:
    ```
-   event,schluessel
+   event,key
    ```
 2. Auf dem ESPEasy-Node unter **Tools → Rules**:
    ```
@@ -375,7 +375,7 @@ aber auf Events. Die in der Praxis funktionierende Kombi:
    endon
    ```
 
-Beim Schalten in HA wird `event,schluessel` per HTTP an den Node geschickt,
+Beim Schalten in HA wird `event,key` per HTTP an den Node geschickt,
 die Rule feuert und pulst GPIO 5. Das Schema funktioniert für jeden
 ESPEasy-Befehl, den man hinter einem Event verstecken will.
 
@@ -390,7 +390,7 @@ Wenn ein Toggle nichts bewirkt, zeigt die INFO-Log-Zeile genau warum
 (Debug muss dafür *nicht* an sein):
 
 ```
-Switch unit=9 task='pufferpumpe' pin=12 state=1 -> success=False last_cmd='gpio,12,1' http=400 body='Unknown command'
+Switch unit=9 task='pump' pin=12 state=1 -> success=False last_cmd='gpio,12,1' http=400 body='Unknown command'
 ```
 
 Das `body=…` zeigt dir genau, warum der Node abweist.
