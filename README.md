@@ -111,7 +111,7 @@ the relay never moves. Since version 2026-05-05 the integration detects
 this case and logs:
 
 ```
-Switch 'zirkulationpumpe' on unit 9 has no known GPIO pin and the node
+Switch 'pump' on unit 9 has no known GPIO pin and the node
 rejected the task-name command. Call service espeasy_p2p.set_gpio_pin
 with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
 permanently.
