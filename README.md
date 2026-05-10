@@ -113,7 +113,7 @@ this case and logs:
 ```
 Switch 'pump' on unit 9 has no known GPIO pin and the node
 rejected the task-name command. Call service espeasy_p2p.set_gpio_pin
-with unit=9 task_name='zirkulationpumpe' pin=<bcm-pin> to fix this
+with unit=9 task_name='pump' pin=<bcm-pin> to fix this
 permanently.
 ```
 
