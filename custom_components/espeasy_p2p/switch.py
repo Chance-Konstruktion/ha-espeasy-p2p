@@ -19,6 +19,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     DOMAIN,
@@ -77,7 +78,7 @@ async def async_setup_entry(
         _add_for_task(task)
 
 
-class ESPEasyP2PSwitch(SwitchEntity):
+class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
     _attr_should_poll = False
     _attr_has_entity_name = True
 
@@ -108,6 +109,19 @@ class ESPEasyP2PSwitch(SwitchEntity):
         )
 
     async def async_added_to_hass(self) -> None:
+        # Restore last known state so history shows correctly after restart.
+        if (last_state := await self.async_get_last_state()) is not None:
+            if last_state.state in ("on", "off"):
+                restored_value = 1.0 if last_state.state == "on" else 0.0
+                key = (self._src_unit, self._task_index)
+                values = list(self._coordinator.values.get(key) or [0.0, 0.0, 0.0, 0.0])
+                while len(values) <= self._value_index:
+                    values.append(0.0)
+                # Only restore if coordinator hasn't received a live value yet.
+                if key not in self._coordinator.values:
+                    values[self._value_index] = restored_value
+                    self._coordinator.values[key] = values
+
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
