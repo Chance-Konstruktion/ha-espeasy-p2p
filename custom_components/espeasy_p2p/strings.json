@@ -27,8 +27,8 @@
         }
       },
       "edit": {
-        "title": "Edit '{task}' on unit {unit}",
-        "description": "Set the BCM GPIO pin (the integration sends 'gpio,PIN,STATE'), or a command template — useful for stock ESPEasy with rules. Examples:\n\n• Stock ESPEasy + rule: 'event,schluessel' triggers 'On schluessel do … endon' on the node.\n• Direct helper: 'door,{state}' (the placeholder {state} is replaced with 0 or 1).\n\nIf both fields are filled, the template wins. Tick 'Remove this entry' to delete the override entirely.",
+        "title": "Edit {task} on unit {unit}",
+        "description": "Set the BCM GPIO pin (the integration sends 'gpio,PIN,STATE'), or a command template — useful for stock ESPEasy with rules. Examples:\n\n• Stock ESPEasy + rule: 'event,schluessel' triggers 'On schluessel do … endon' on the node.\n• Direct helper: \"door,{state}\" (the placeholder {state} is replaced with 0 or 1).\n\nIf both fields are filled, the template wins. Tick 'Remove this entry' to delete the override entirely.",
         "data": {
           "pin": "BCM GPIO pin (optional)",
           "cmd": "Command template (optional)",

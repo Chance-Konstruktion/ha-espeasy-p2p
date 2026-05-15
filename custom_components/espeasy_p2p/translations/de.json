@@ -27,8 +27,8 @@
         }
       },
       "edit": {
-        "title": "'{task}' auf Unit {unit} bearbeiten",
-        "description": "Entweder einen BCM-GPIO-Pin setzen (es wird 'gpio,PIN,STATE' geschickt) oder ein Command-Template — praktisch für Stock-ESPEasy mit Rules. Beispiele:\n\n• Stock ESPEasy + Rule: 'event,schluessel' triggert 'On schluessel do … endon' auf dem Node.\n• Direkter Helper: 'door,{state}' (der Platzhalter {state} wird durch 0/1 ersetzt).\n\nWenn beide Felder gefüllt sind, gewinnt das Template. 'Eintrag entfernen' anhaken löscht die Override komplett.",
+        "title": "{task} auf Unit {unit} bearbeiten",
+        "description": "Entweder einen BCM-GPIO-Pin setzen (es wird 'gpio,PIN,STATE' geschickt) oder ein Command-Template — praktisch für Stock-ESPEasy mit Rules. Beispiele:\n\n• Stock ESPEasy + Rule: 'event,schluessel' triggert 'On schluessel do … endon' auf dem Node.\n• Direkter Helper: \"door,{state}\" (der Platzhalter {state} wird durch 0/1 ersetzt).\n\nWenn beide Felder gefüllt sind, gewinnt das Template. 'Eintrag entfernen' anhaken löscht die Override komplett.",
         "data": {
           "pin": "BCM-GPIO-Pin (optional)",
           "cmd": "Command-Template (optional)",
