@@ -28,14 +28,18 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_COMMAND_MAP,
+    CONF_DISPLAY_PRECISION,
     CONF_GPIO_PIN_MAP,
     CONF_NAME,
     CONF_PORT,
     CONF_UNIT,
+    DEFAULT_DISPLAY_PRECISION,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEFAULT_UNIT,
     DOMAIN,
+    MAX_DISPLAY_PRECISION,
+    MIN_DISPLAY_PRECISION,
     SWITCH_VALUE_NAMES,
 )
 
@@ -61,6 +65,11 @@ class ESPEasyP2PConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_UNIT: user_input[CONF_UNIT],
                     CONF_NAME: user_input[CONF_NAME],
                 },
+                options={
+                    CONF_DISPLAY_PRECISION: int(
+                        user_input[CONF_DISPLAY_PRECISION]
+                    ),
+                },
             )
 
         schema = vol.Schema(
@@ -72,6 +81,16 @@ class ESPEasyP2PConfigFlow(ConfigFlow, domain=DOMAIN):
                     int, vol.Range(min=1, max=255)
                 ),
                 vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+                vol.Required(
+                    CONF_DISPLAY_PRECISION, default=DEFAULT_DISPLAY_PRECISION
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=MIN_DISPLAY_PRECISION,
+                        max=MAX_DISPLAY_PRECISION,
+                        step=1,
+                        mode=NumberSelectorMode.BOX,
+                    )
+                ),
             }
         )
         return self.async_show_form(step_id="user", data_schema=schema)
@@ -97,6 +116,9 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
         self._entry = entry
         self._pins: dict[str, int] = dict(entry.options.get(CONF_GPIO_PIN_MAP, {}))
         self._cmds: dict[str, str] = dict(entry.options.get(CONF_COMMAND_MAP, {}))
+        self._precision: int = int(
+            entry.options.get(CONF_DISPLAY_PRECISION, DEFAULT_DISPLAY_PRECISION)
+        )
         self._editing: str | None = None
 
     def _switch_tasks(self) -> list[tuple[int, str]]:
@@ -124,12 +146,19 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         keys = self._all_keys()
-        if not keys:
-            return self.async_abort(reason="no_switch_tasks")
 
         if user_input is not None:
+            precision_raw = user_input.get(CONF_DISPLAY_PRECISION)
+            if precision_raw is not None:
+                try:
+                    self._precision = max(
+                        MIN_DISPLAY_PRECISION,
+                        min(MAX_DISPLAY_PRECISION, int(precision_raw)),
+                    )
+                except (TypeError, ValueError):
+                    pass
             choice = user_input.get("task")
-            if choice == _SAVE_CHOICE or not choice:
+            if not keys or choice == _SAVE_CHOICE or not choice:
                 return self._save_and_close()
             self._editing = choice
             return await self.async_step_edit()
@@ -152,20 +181,30 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
             SelectOptionDict(value=_SAVE_CHOICE, label="Save and close")
         )
 
-        schema = vol.Schema(
-            {
-                vol.Required("task"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=options,
-                        mode=SelectSelectorMode.LIST,
-                        custom_value=False,
-                    )
-                ),
-            }
-        )
+        schema_dict: dict[Any, Any] = {
+            vol.Required(
+                CONF_DISPLAY_PRECISION, default=self._precision
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=MIN_DISPLAY_PRECISION,
+                    max=MAX_DISPLAY_PRECISION,
+                    step=1,
+                    mode=NumberSelectorMode.BOX,
+                )
+            ),
+        }
+        if keys:
+            schema_dict[vol.Required("task")] = SelectSelector(
+                SelectSelectorConfig(
+                    options=options,
+                    mode=SelectSelectorMode.LIST,
+                    custom_value=False,
+                )
+            )
+
         return self.async_show_form(
             step_id="init",
-            data_schema=schema,
+            data_schema=vol.Schema(schema_dict),
             description_placeholders={"task_count": str(len(keys))},
         )
 
@@ -241,5 +280,6 @@ class ESPEasyP2POptionsFlow(OptionsFlow):
             data={
                 CONF_GPIO_PIN_MAP: dict(self._pins),
                 CONF_COMMAND_MAP: dict(self._cmds),
+                CONF_DISPLAY_PRECISION: self._precision,
             },
         )

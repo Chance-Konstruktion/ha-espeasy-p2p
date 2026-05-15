@@ -21,6 +21,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_DISPLAY_PRECISION,
+    DEFAULT_DISPLAY_PRECISION,
     DOMAIN,
     SIGNAL_NODE_AVAILABILITY,
     SIGNAL_TASK_DISCOVERED,
@@ -43,6 +45,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: ESPEasyP2PCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    precision = int(
+        entry.options.get(CONF_DISPLAY_PRECISION, DEFAULT_DISPLAY_PRECISION)
+    )
 
     known: set[tuple[int, int, int]] = set()
 
@@ -70,6 +76,7 @@ async def async_setup_entry(
                     src_unit=task.src_unit,
                     task_index=task.task_index,
                     value_index=value_index,
+                    display_precision=precision,
                 )
             )
         if new_entities:
@@ -93,7 +100,6 @@ class ESPEasyP2PValueSensor(SensorEntity):
     _attr_should_poll = False
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
-    _attr_suggested_display_precision = 3
 
     def __init__(
         self,
@@ -102,6 +108,7 @@ class ESPEasyP2PValueSensor(SensorEntity):
         src_unit: int,
         task_index: int,
         value_index: int,
+        display_precision: int = DEFAULT_DISPLAY_PRECISION,
     ) -> None:
         self._coordinator = coordinator
         self._entry_id = entry_id
@@ -111,6 +118,7 @@ class ESPEasyP2PValueSensor(SensorEntity):
         self._attr_unique_id = (
             f"espeasy_p2p_{src_unit}_{task_index}_{value_index}"
         )
+        self._attr_suggested_display_precision = display_precision
         node = coordinator.nodes.get(src_unit)
         identifiers = {(DOMAIN, f"unit-{src_unit}")}
         connections = set()

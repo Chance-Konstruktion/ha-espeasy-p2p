@@ -7,7 +7,8 @@
         "data": {
           "port": "UDP port",
           "unit": "Home Assistant unit number",
-          "name": "Home Assistant peer name"
+          "name": "Home Assistant peer name",
+          "display_precision": "Decimal places shown for sensor values (0–6)"
         }
       }
     },
@@ -21,12 +22,13 @@
         "title": "Switch configuration",
         "description": "Pick a task to set its GPIO pin or command template, or choose 'Save and close' when you are done. {task_count} task(s) listed.",
         "data": {
+          "display_precision": "Decimal places shown for sensor values (0–6)",
           "task": "Task"
         }
       },
       "edit": {
-        "title": "Edit '{task}' on unit {unit}",
-        "description": "Set the BCM GPIO pin (the integration sends 'gpio,PIN,STATE'), or a command template — useful for stock ESPEasy with rules. Examples:\n\n• Stock ESPEasy + rule: 'event,schluessel' triggers 'On schluessel do … endon' on the node.\n• Direct helper: 'door,{state}' (the placeholder {state} is replaced with 0 or 1).\n\nIf both fields are filled, the template wins. Tick 'Remove this entry' to delete the override entirely.",
+        "title": "Edit {task} on unit {unit}",
+        "description": "Set the BCM GPIO pin (the integration sends 'gpio,PIN,STATE'), or a command template — useful for stock ESPEasy with rules. Examples:\n\n• Stock ESPEasy + rule: 'event,schluessel' triggers 'On schluessel do … endon' on the node.\n• Direct helper: \"door,{state}\" (the placeholder {state} is replaced with 0 or 1).\n\nIf both fields are filled, the template wins. Tick 'Remove this entry' to delete the override entirely.",
         "data": {
           "pin": "BCM GPIO pin (optional)",
           "cmd": "Command template (optional)",
