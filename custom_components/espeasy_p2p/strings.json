@@ -7,7 +7,8 @@
         "data": {
           "port": "UDP port",
           "unit": "Home Assistant unit number",
-          "name": "Home Assistant peer name"
+          "name": "Home Assistant peer name",
+          "display_precision": "Decimal places shown for sensor values (0–6)"
         }
       }
     },
@@ -21,6 +22,7 @@
         "title": "Switch configuration",
         "description": "Pick a task to set its GPIO pin or command template, or choose 'Save and close' when you are done. {task_count} task(s) listed.",
         "data": {
+          "display_precision": "Decimal places shown for sensor values (0–6)",
           "task": "Task"
         }
       },

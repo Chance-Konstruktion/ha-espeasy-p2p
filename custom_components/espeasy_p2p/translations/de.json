@@ -7,7 +7,8 @@
         "data": {
           "port": "UDP-Port",
           "unit": "Unit-Nummer von Home Assistant",
-          "name": "Peer-Name von Home Assistant"
+          "name": "Peer-Name von Home Assistant",
+          "display_precision": "Nachkommastellen für Sensorwerte (0–6)"
         }
       }
     },
@@ -21,6 +22,7 @@
         "title": "Schalter-Konfiguration",
         "description": "Task auswählen, um GPIO-Pin oder Command-Template zu setzen — oder 'Speichern und schließen' wählen, wenn alles passt. {task_count} Task(s) gelistet.",
         "data": {
+          "display_precision": "Nachkommastellen für Sensorwerte (0–6)",
           "task": "Task"
         }
       },
