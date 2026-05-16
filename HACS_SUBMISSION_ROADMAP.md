@@ -29,8 +29,8 @@ git clone https://github.com/Chance-Konstruktion/brands.git
 cd brands
 git remote add upstream https://github.com/home-assistant/brands.git
 git fetch upstream
-# Default-Branch von home-assistant/brands ist 'main' (nicht master)
-git checkout -b add-espeasy-p2p upstream/main
+# home-assistant/brands nutzt 'master' als Default-Branch
+git checkout -b add-espeasy-p2p upstream/master
 ```
 
 ### 2.2 Brand-Dateien einkopieren
@@ -59,7 +59,7 @@ git push -u origin add-espeasy-p2p
 ```
 
 ### 2.4 PR öffnen
-- URL: https://github.com/home-assistant/brands/compare/main...Chance-Konstruktion:brands:add-espeasy-p2p
+- URL: https://github.com/home-assistant/brands/compare/master...Chance-Konstruktion:brands:add-espeasy-p2p
 - **Title**: `Add espeasy_p2p`
 - **Body**: kurz: *"Logo/icons for the ESPEasy P2P custom integration (chance-konstruktion/ha-espeasy-p2p)."*
 - Auf den Bot warten (validiert Größe/Format) → meist wenige Tage bis Merge.
@@ -82,7 +82,7 @@ Die Datei heißt schlicht `integration` (ohne Endung), Inhalt ist eine JSON-List
 Den Slug `chance-konstruktion/ha-espeasy-p2p` alphabetisch einsortieren. Der Bot
 prüft:
 - gültige JSON-Syntax (keine trailing comma!)
-- strikt alphabetische Sortierung
+- strikt alphabetische Sortierung (case-sensitive, ASCII)
 
 ### 3.3 Commit + Push
 ```bash
