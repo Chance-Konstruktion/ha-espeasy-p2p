@@ -65,7 +65,7 @@
     },
     "set_gpio_pin": {
       "name": "Set GPIO pin for a task",
-      "description": "Persist a (unit, task name) → GPIO pin mapping. Needed for firmware (notably RPiEasy 'Output Helper') that does not expose the pin via /json. Once set, switch toggles use `gpio,<pin>,<state>` directly.",
+      "description": "Persist a (unit, task name) → GPIO pin mapping. Needed for firmware (notably RPiEasy 'Output Helper') that does not expose the pin via /json. Once set, switch toggles use 'gpio,PIN,STATE' directly.",
       "fields": {
         "unit": {
           "name": "Unit",

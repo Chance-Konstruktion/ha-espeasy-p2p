@@ -65,7 +65,7 @@
     },
     "set_gpio_pin": {
       "name": "GPIO-Pin für einen Task setzen",
-      "description": "Speichert dauerhaft ein (Unit, Task-Name) → GPIO-Pin-Mapping. Nötig für Firmware (vor allem RPiEasy 'Output Helper'), die den Pin nicht über /json ausliefert. Danach werden Toggles direkt als `gpio,<pin>,<state>` gesendet.",
+      "description": "Speichert dauerhaft ein (Unit, Task-Name) → GPIO-Pin-Mapping. Nötig für Firmware (vor allem RPiEasy 'Output Helper'), die den Pin nicht über /json ausliefert. Danach werden Toggles direkt als 'gpio,PIN,STATE' gesendet.",
       "fields": {
         "unit": {
           "name": "Unit",
