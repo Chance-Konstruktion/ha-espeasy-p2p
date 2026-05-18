@@ -368,7 +368,7 @@ aber auf Events. Die in der Praxis funktionierende Kombi:
    ```
 2. Auf dem ESPEasy-Node unter **Tools → Rules**:
    ```
-   On schluessel do
+   On key do
      GPIO,5,10
      Publish,2,1
      timerSet,2,4

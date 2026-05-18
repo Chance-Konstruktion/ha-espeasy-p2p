@@ -45,6 +45,42 @@
       "name": "Knoten suchen",
       "description": "Sendet ein Node-Info-Paket per Broadcast, damit alle ESPEasy-Knoten sich sofort melden."
     },
+    "refetch_metadata": {
+      "name": "Task-Metadaten neu laden",
+      "description": "Erzwingt einen Refresh der /json-Metadaten für alle bekannten Knoten. Praktisch nach Updates der Integration, damit neu extrahierte Felder (z. B. GPIO-Pins) ohne HA-Neustart übernommen werden."
+    },
+    "send_command": {
+      "name": "Befehl an Knoten senden",
+      "description": "Sendet einen beliebigen ESPEasy-Befehl an einen bestimmten Knoten — sowohl per C013-P2P (Type-0) als auch per HTTP /control. Die HTTP-Antwort wird auf INFO geloggt, sodass nachvollziehbar ist, was der Knoten akzeptiert.",
+      "fields": {
+        "unit": {
+          "name": "Unit",
+          "description": "ESPEasy-Unit-Nummer des Ziel-Knotens."
+        },
+        "command": {
+          "name": "Befehl",
+          "description": "Befehl, exakt wie er nach `?cmd=` im Web-UI des Knotens stehen würde (z. B. `gpio,12,1`)."
+        }
+      }
+    },
+    "set_gpio_pin": {
+      "name": "GPIO-Pin für einen Task setzen",
+      "description": "Speichert dauerhaft ein (Unit, Task-Name) → GPIO-Pin-Mapping. Nötig für Firmware (vor allem RPiEasy 'Output Helper'), die den Pin nicht über /json ausliefert. Danach werden Toggles direkt als `gpio,<pin>,<state>` gesendet.",
+      "fields": {
+        "unit": {
+          "name": "Unit",
+          "description": "ESPEasy-Unit-Nummer des Ziel-Knotens."
+        },
+        "task_name": {
+          "name": "Task-Name",
+          "description": "Exakter TaskName wie im Knoten-UI angezeigt."
+        },
+        "pin": {
+          "name": "GPIO-Pin",
+          "description": "BCM-Pin-Nummer, die den Ausgang treibt."
+        }
+      }
+    },
     "remove_node": {
       "name": "Knoten entfernen",
       "description": "Vergisst einen Knoten und entfernt das HA-Gerät, seine Sensoren und Schalter. Der Knoten taucht wieder auf, sobald er einen Heartbeat sendet.",
