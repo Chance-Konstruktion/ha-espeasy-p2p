@@ -1,18 +1,18 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="ESPEasy P2P — Push-based bridge between ESPEasy nodes and Home Assistant" width="100%"/>
+<img src="assets/banner.svg" alt="ESPEasy & RPiEasy P2P — Push-based bridge between ESPEasy/RPiEasy nodes and Home Assistant" width="100%"/>
 
-# 📡 ESPEasy P2P for Home Assistant
+# 📡 ESPEasy & RPiEasy P2P for Home Assistant
 
-**Push-based, local-first bridge between ESPEasy nodes and Home Assistant — no MQTT, no cloud, no polling.**
+**Push-based, local-first bridge between ESPEasy & RPiEasy nodes and Home Assistant — no MQTT, no cloud, no polling.**
 
-Drop your ESP8266/ESP32 sensors on the LAN, set them to **C013 (ESPEasy P2P)** controller, and they show up in Home Assistant on their own. Every value is pushed the moment it changes. Every relay can be switched back from Lovelace.
+Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to **C013 (ESPEasy/RPiEasy P2P)** controller, and they show up in Home Assistant on their own. Every value is pushed the moment it changes. Every relay can be switched back from Lovelace.
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://hacs.xyz/)
 [![GitHub release](https://img.shields.io/github/v/release/Chance-Konstruktion/ha-espeasy-p2p?style=flat-square&color=18BCF2)](https://github.com/Chance-Konstruktion/ha-espeasy-p2p/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-FF9C2A.svg?style=flat-square)](#-license)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-41BDF5.svg?style=flat-square&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
-[![Made for ESPEasy](https://img.shields.io/badge/Made%20for-ESPEasy-0E5C86.svg?style=flat-square)](https://github.com/letscontrolit/ESPEasy)
+[![Made for ESPEasy & RPiEasy](https://img.shields.io/badge/Made%20for-ESPEasy%20%26%20RPiEasy-0E5C86.svg?style=flat-square)](https://github.com/letscontrolit/ESPEasy)
 
 **[Quick Start](#-quick-start) · [How it works](#-how-the-data-flows) · [Switching](#-switching-relays) · [Reference](#-reference) · [Troubleshooting](#-troubleshooting)**
 
@@ -24,7 +24,7 @@ Drop your ESP8266/ESP32 sensors on the LAN, set them to **C013 (ESPEasy P2P)** c
 
 > **MQTT is great. Until you don't want to run a broker. Until you don't want to flash credentials. Until you just want a sensor on the wall to show up in Home Assistant — and stay there.**
 
-ESPEasy already speaks **C013** — a tiny UDP broadcast protocol made for ESPEasy nodes to gossip with each other. This integration teaches Home Assistant to listen on the same wire. That's it. That's the whole trick.
+ESPEasy and RPiEasy already speak **C013** — a tiny UDP broadcast protocol made for ESPEasy/RPiEasy nodes to gossip with each other. This integration teaches Home Assistant to listen on the same wire. That's it. That's the whole trick.
 
 <table>
 <tr>
@@ -168,7 +168,7 @@ Pick the UDP port (default `8266`) and an optional unit number for HA itself. Co
 
 ### 3 · Point your nodes at HA
 
-On every ESPEasy unit, in **Controllers → Add → ESPEasy P2P (C013)**:
+On every ESPEasy or RPiEasy unit, in **Controllers → Add → ESPEasy P2P (C013)**:
 
 ```yaml
 Controller IP:   <your Home Assistant IP>
