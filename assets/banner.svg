@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" width="1280" height="420" role="img" aria-label="ESPEasy P2P — Push-based bridge between ESPEasy nodes and Home Assistant">
+  <defs>
+    
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F4F8FB"></stop>
+      <stop offset="0.55" stop-color="#E9F2F8"></stop>
+      <stop offset="1" stop-color="#FFF4E6"></stop>
+    </linearGradient>
+
+    
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0.4">
+      <stop offset="0" stop-color="#0E5C86"></stop>
+      <stop offset="0.55" stop-color="#1A8FC4"></stop>
+      <stop offset="1" stop-color="#18BCF2"></stop>
+    </linearGradient>
+
+    
+    <radialGradient id="warmGlow" cx="0.85" cy="0.25" r="0.55">
+      <stop offset="0" stop-color="#FFB347" stop-opacity="0.35"></stop>
+      <stop offset="0.5" stop-color="#FFB347" stop-opacity="0.10"></stop>
+      <stop offset="1" stop-color="#FFB347" stop-opacity="0"></stop>
+    </radialGradient>
+
+    
+    <radialGradient id="coolGlow" cx="0.12" cy="0.78" r="0.55">
+      <stop offset="0" stop-color="#18BCF2" stop-opacity="0.28"></stop>
+      <stop offset="0.5" stop-color="#18BCF2" stop-opacity="0.08"></stop>
+      <stop offset="1" stop-color="#18BCF2" stop-opacity="0"></stop>
+    </radialGradient>
+
+    
+    <pattern id="dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.2" fill="#1A8FC4" fill-opacity="0.12"></circle>
+    </pattern>
+
+    
+    <radialGradient id="ringFade" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.5" stop-color="#18BCF2" stop-opacity="1"></stop>
+      <stop offset="1" stop-color="#18BCF2" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+
+  
+  <rect width="1280" height="420" fill="url(#bg)"></rect>
+  <rect width="1280" height="420" fill="url(#dots)"></rect>
+  <rect width="1280" height="420" fill="url(#warmGlow)"></rect>
+  <rect width="1280" height="420" fill="url(#coolGlow)"></rect>
+
+  
+  <rect x="0" y="0" width="1280" height="2" fill="#18BCF2" fill-opacity="0.45"></rect>
+
+  
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#3D6A85" letter-spacing="2">
+    <circle cx="72" cy="58" r="3.5" fill="#18BCF2"></circle>
+    <text x="86" y="63">HACS</text>
+    <text x="142" y="63" fill="#7A8896">·</text>
+    <text x="158" y="63">v0.1.0</text>
+    <text x="222" y="63" fill="#7A8896">·</text>
+    <text x="238" y="63">LOCAL-FIRST</text>
+    <text x="346" y="63" fill="#7A8896">·</text>
+    <text x="362" y="63">UDP P2P</text>
+    <text x="438" y="63" fill="#7A8896">·</text>
+    <text x="454" y="63">OPEN SOURCE</text>
+  </g>
+
+  
+  <g font-family="-apple-system, &#39;Segoe UI&#39;, Inter, system-ui, sans-serif" font-weight="900">
+    
+    <text x="68" y="208" font-size="108" letter-spacing="-4" fill="#18BCF2" fill-opacity="0.10">ESPEasy P2P</text>
+    <text x="64" y="204" font-size="108" letter-spacing="-4" fill="url(#title)">ESPEasy P2P</text>
+  </g>
+
+  
+  <rect x="66" y="220" width="120" height="4" rx="2" fill="#FF9C2A"></rect>
+
+  
+  <text x="66" y="262" font-family="-apple-system, &#39;Segoe UI&#39;, Inter, system-ui, sans-serif" font-size="22" font-weight="500" fill="#2E4859">
+    Push-based bridge between ESPEasy nodes and Home Assistant — no MQTT, no cloud, no polling.
+  </text>
+
+  
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#0E5C86">
+    
+    <g transform="translate(64, 308)">
+      <rect width="148" height="38" rx="19" fill="#FFFFFF" stroke="#18BCF2" stroke-width="1.5"></rect>
+      <circle cx="22" cy="19" r="4" fill="#18BCF2"></circle>
+      <text x="36" y="24" letter-spacing="1">C013 PUSH</text>
+    </g>
+    
+    <g transform="translate(222, 308)">
+      <rect width="170" height="38" rx="19" fill="#FFFFFF" stroke="#18BCF2" stroke-width="1.5"></rect>
+      <path d="M14 19 L20 13 L20 25 Z" fill="#18BCF2"></path>
+      <text x="32" y="24" letter-spacing="1">UDP DISCOVERY</text>
+    </g>
+    
+    <g transform="translate(402, 308)">
+      <rect width="170" height="38" rx="19" fill="#FFFFFF" stroke="#18BCF2" stroke-width="1.5"></rect>
+      <rect x="14" y="15" width="9" height="9" rx="1.5" fill="#18BCF2"></rect>
+      <text x="32" y="24" letter-spacing="1">AUTO-ENTITIES</text>
+    </g>
+    
+    <g transform="translate(582, 308)">
+      <rect width="138" height="38" rx="19" fill="#FFFFFF" stroke="#FF9C2A" stroke-width="1.5"></rect>
+      <circle cx="22" cy="19" r="4" fill="#FF9C2A"></circle>
+      <text x="36" y="24" letter-spacing="1" fill="#A35400">DE · EN</text>
+    </g>
+    
+    <g transform="translate(730, 308)">
+      <rect width="158" height="38" rx="19" fill="#FFFFFF" stroke="#18BCF2" stroke-width="1.5"></rect>
+      <path d="M14 19 L24 19 M19 14 L19 24" stroke="#18BCF2" stroke-width="2" stroke-linecap="round"></path>
+      <text x="32" y="24" letter-spacing="1">SWITCH RELAYS</text>
+    </g>
+  </g>
+
+  
+  <g transform="translate(1010, 180)">
+    
+    <g stroke="#0E5C86" stroke-width="2" fill="none" stroke-linecap="square">
+      <path d="M-150 -110 L-150 -90 M-150 -110 L-130 -110"></path>
+      <path d="M 150 -110 L 150 -90 M 150 -110 L 130 -110"></path>
+      <path d="M-150  110 L-150  90 M-150  110 L-130  110"></path>
+      <path d="M 150  110 L 150  90 M 150  110 L 130  110"></path>
+    </g>
+
+    
+    <g fill="none" stroke="#18BCF2" stroke-linecap="round">
+      <circle cx="0" cy="0" r="42" stroke-opacity="0.55" stroke-width="1.5"></circle>
+      <circle cx="0" cy="0" r="62" stroke-opacity="0.40" stroke-width="1.5" stroke-dasharray="2 4"></circle>
+      <circle cx="0" cy="0" r="82" stroke-opacity="0.28" stroke-width="1.5"></circle>
+      <circle cx="0" cy="0" r="102" stroke-opacity="0.18" stroke-width="1.5" stroke-dasharray="2 4"></circle>
+    </g>
+
+    
+    <g>
+      <rect x="-28" y="-28" width="56" height="56" rx="6" fill="#FFFFFF" stroke="#0E5C86" stroke-width="2"></rect>
+      
+      <g stroke="#0E5C86" stroke-width="2" stroke-linecap="round">
+        
+        <path d="M-18 -28 L-18 -36"></path>
+        <path d="M -6 -28 L -6 -36"></path>
+        <path d="M  6 -28 L  6 -36"></path>
+        <path d="M 18 -28 L 18 -36"></path>
+        
+        <path d="M-18  28 L-18  36"></path>
+        <path d="M -6  28 L -6  36"></path>
+        <path d="M  6  28 L  6  36"></path>
+        <path d="M 18  28 L 18  36"></path>
+        
+        <path d="M-28 -18 L-36 -18"></path>
+        <path d="M-28  -6 L-36  -6"></path>
+        <path d="M-28   6 L-36   6"></path>
+        <path d="M-28  18 L-36  18"></path>
+        
+        <path d="M 28 -18 L 36 -18"></path>
+        <path d="M 28  -6 L 36  -6"></path>
+        <path d="M 28   6 L 36   6"></path>
+        <path d="M 28  18 L 36  18"></path>
+      </g>
+      
+      <rect x="-14" y="-14" width="28" height="28" rx="3" fill="none" stroke="#18BCF2" stroke-width="1.5"></rect>
+      <text x="0" y="5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" fill="#0E5C86">ESP</text>
+    </g>
+
+    
+    <circle cx="0" cy="-102" r="4" fill="#FF9C2A"></circle>
+  </g>
+
+  
+  <g>
+    <rect x="0" y="372" width="1280" height="48" fill="#0E5C86"></rect>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#D9ECF6" letter-spacing="2">
+      <text x="64" y="402">&gt;  broadcast  →  discover  →  bind  →  entity  →  state.set</text>
+    </g>
+    <g transform="translate(1140, 396)">
+      <circle cx="0" cy="0" r="5" fill="#7CE0A8"></circle>
+      <circle cx="0" cy="0" r="5" fill="none" stroke="#7CE0A8" stroke-opacity="0.4" stroke-width="2">
+        
+        
+      </circle>
+      <text x="14" y="5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" fill="#7CE0A8" letter-spacing="2">LIVE</text>
+    </g>
+  </g>
+</svg>
