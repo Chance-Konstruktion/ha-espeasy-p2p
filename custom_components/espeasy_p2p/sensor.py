@@ -217,9 +217,15 @@ class ESPEasyP2PValueSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        if not self._coordinator.is_unit_online(self._src_unit):
-            return False
-        return (self._src_unit, self._task_index) in self._coordinator.values
+        # Available as soon as the node is online (a Type-1/Type-5 packet or a
+        # successful /json fetch within the timeout). We deliberately do NOT
+        # also require that a live Type-5 value has already arrived: RPiEasy,
+        # unlike stock ESPEasy, often does not re-broadcast sensor data
+        # immediately after a (power-outage) restart, which would otherwise
+        # leave its entities stuck "unavailable" even though the node is up and
+        # discovered. `native_value` returns None until the first value lands,
+        # so the entity shows "unknown" rather than "unavailable" in the gap.
+        return self._coordinator.is_unit_online(self._src_unit)
 
 
 def _classify(
