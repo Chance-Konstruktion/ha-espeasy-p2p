@@ -357,6 +357,11 @@ class ESPEasyP2PCoordinator:
             self._fetched_meta_for.discard(node.ip)
             return
 
+        # Reaching the node over HTTP is itself proof it is alive. Record it
+        # so entities go available even if the node's UDP heartbeat is delayed
+        # after a restart (notably RPiEasy, which may not re-broadcast at once).
+        self._touch(node.unit)
+
         sensors = data.get("Sensors") or []
         learned = 0
         for sensor in sensors:
