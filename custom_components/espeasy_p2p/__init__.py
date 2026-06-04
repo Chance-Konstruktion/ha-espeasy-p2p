@@ -7,6 +7,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
     CONF_COMMAND_MAP,
@@ -36,9 +37,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     name = entry.data.get(CONF_NAME, DEFAULT_NAME)
-    _LOGGER.info(
-        "Loading ESPEasy P2P entry %s with port=%s unit=%s name=%s (raw data=%s)",
-        entry.entry_id, port, unit, name, dict(entry.data),
+    _LOGGER.debug(
+        "Loading ESPEasy P2P entry %s with port=%s unit=%s name=%s",
+        entry.entry_id, port, unit, name,
     )
     # If the entry was created by an older version of the integration with
     # an empty data dict, persist the resolved defaults so the next reload
@@ -50,7 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry,
             data={CONF_PORT: port, CONF_UNIT: unit, CONF_NAME: name},
         )
-        _LOGGER.info("Backfilled missing config entry data with defaults")
+        _LOGGER.debug("Backfilled missing config entry data with defaults")
     pin_overrides = dict(entry.options.get(CONF_GPIO_PIN_MAP, {}))
     command_overrides = dict(entry.options.get(CONF_COMMAND_MAP, {}))
     coordinator = ESPEasyP2PCoordinator(
@@ -65,8 +66,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         await coordinator.async_start()
     except OSError as err:
-        _LOGGER.error("Failed to bind UDP port %s: %s", port, err)
-        return False
+        # Most commonly the UDP port is momentarily still held by a previous
+        # instance during a reload. Signal "not ready" so HA retries with
+        # backoff instead of failing the entry permanently.
+        raise ConfigEntryNotReady(
+            f"Could not bind UDP port {port}: {err}"
+        ) from err
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -35,9 +35,6 @@
           "remove": "Remove this entry"
         }
       }
-    },
-    "abort": {
-      "no_switch_tasks": "No switch-eligible tasks have been discovered yet. Wait for nodes to announce or run the 'Scan for nodes' service, then reopen this dialog."
     }
   },
   "services": {
