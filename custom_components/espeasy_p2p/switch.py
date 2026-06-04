@@ -211,6 +211,13 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
             return
         task = self._coordinator.tasks.get((self._src_unit, self._task_index))
         task_name = (task.task_name if task else "") or f"task{self._task_index}"
+        # Real (firmware-reported) task/value names, used for RPiEasy's
+        # task-name-addressed command. Kept separate from the synthetic
+        # "task<idx>" fallback above so we don't send a bogus name.
+        real_task_name = task.task_name if task else ""
+        value_name = ""
+        if task and 0 <= self._value_index < len(task.value_names):
+            value_name = task.value_names[self._value_index]
         gpio_pin = self._coordinator.get_gpio_pin(self._src_unit, task_name)
         template = self._coordinator.get_command_template(
             self._src_unit, task_name
@@ -223,6 +230,12 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
         # - "gpio,<pin>,<state>" works for "Switch input"/"Output Helper"
         #   tasks (the most common setup with relays/pumps). RPiEasy needs
         #   this form: it answers <taskname>,<state> with body 'False'.
+        # - "taskvaluesetandrun,<taskname>,<valuename>,<state>" is RPiEasy's
+        #   pin-free path: it sets the task value (driving the physical GPIO
+        #   for output plugins) and runs the task, which also publishes the
+        #   new state back over C013. This is what lets RPiEasy switches work
+        #   without the user having to hand-configure a GPIO pin, since
+        #   RPiEasy's /json does not expose the pin like ESPEasy does.
         # - "<taskname>,<state>" works for plugins like "Generic Dummy"
         #   or "Output - PWM Motor" that respond to their task name.
         candidates: list[str] = []
@@ -231,6 +244,10 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
         else:
             if gpio_pin is not None:
                 candidates.append(f"gpio,{gpio_pin},{state}")
+            if real_task_name and value_name:
+                candidates.append(
+                    f"taskvaluesetandrun,{real_task_name},{value_name},{state}"
+                )
             candidates.append(f"{task_name},{state}")
 
         # Fire-and-forget P2P (RPiEasy accepts type-0; stock ESPEasy ignores).
