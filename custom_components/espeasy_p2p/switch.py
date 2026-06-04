@@ -304,6 +304,11 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
         values[self._value_index] = float(state)
         self._coordinator.values[(self._src_unit, self._task_index)] = values
         self.async_write_ha_state()
+        # The relay may switch itself back shortly (internal timer/pulse) after
+        # we turned it on. Re-read this one node a few times so HA catches the
+        # auto-off without waiting for the slow periodic poll.
+        if state:
+            self._coordinator.async_schedule_resync(self._src_unit)
 
 
 def _render_template(template: str, state: int) -> str:

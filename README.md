@@ -296,6 +296,23 @@ integration's **Configure** (options) dialog. The stale/offline timeout
 </details>
 
 <details>
+<summary><b>⏱️ A switch flips back / state lags on short intervals</b></summary>
+
+Switch state in HA is confirmed three ways: a C013 **push** from the node
+when the value changes, a **30 s `/json` poll** as a safety net, and — right
+after HA itself toggles a switch on — a short **targeted re-read burst**
+(~3 s / 8 s / 20 s, that one node only). So a relay that auto-switches off a
+few seconds later (internal timer/pulse) is caught quickly, with no
+steady-state overhead.
+
+The remaining limit: **on/off cycles faster than ~3 s** that HA can't observe
+in between may be missed (HA might only ever see one of the two states). For
+accurate state on very fast-cycling outputs, make the node **broadcast on
+every change** (`Send to controller` so each transition is pushed) rather
+than relying on HA to catch it.
+</details>
+
+<details>
 <summary><b>🌀 Duplicate entities after a unit-number change</b></summary>
 
 Use `espeasy_p2p.reload_unit` or remove the device under **Settings → Devices & Services** and let it rediscover.
