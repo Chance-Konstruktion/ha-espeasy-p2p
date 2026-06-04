@@ -85,9 +85,16 @@ class ESPEasyP2PCoordinator:
         self._transport: asyncio.DatagramTransport | None = None
         self._announce_task: asyncio.Task | None = None
         self._aging_task: asyncio.Task | None = None
-        # Track which node IPs we've already fetched task metadata from so
-        # we don't re-poll on every periodic Type-1 heartbeat.
-        self._fetched_meta_for: set[str] = set()
+        # IPs we currently have an in-flight /json fetch for, so concurrent
+        # Type-1 heartbeats don't kick off duplicate HTTP requests at once.
+        # NOTE: this is deliberately NOT a "fetched once, never again" cache.
+        # RPiEasy's Python HTTP server can be slow to come up after a (power)
+        # restart and its tasks may not be fully initialised when the first
+        # /json is served, so a single attempt often returns empty or fails.
+        # We therefore keep re-fetching on subsequent heartbeats until the
+        # node has actually yielded at least one named task (see _on_node /
+        # _unit_has_named_tasks). Once learned, the gate stops the re-polling.
+        self._meta_inflight: set[str] = set()
 
     def get_gpio_pin(self, unit: int, task_name: str) -> int | None:
         """Return the configured/learned GPIO pin for a task, or None."""
@@ -296,14 +303,26 @@ class ESPEasyP2PCoordinator:
         # Fetch task and value names from the node's HTTP /json endpoint.
         # This is the only reliable way to learn real names if the node
         # never sends Type-3 broadcasts. Both ESPEasy and RPiEasy expose
-        # this endpoint.
+        # this endpoint. We keep retrying on every heartbeat until the unit
+        # has produced at least one named task: the first attempt against a
+        # freshly-booted RPiEasy often comes back empty or unreachable, and
+        # caching that single failure forever is exactly what left RPiEasy
+        # nodes discovered-but-sensorless.
         if (
             node.ip
             and node.ip != "0.0.0.0"
-            and node.ip not in self._fetched_meta_for
+            and node.ip not in self._meta_inflight
+            and not self._unit_has_named_tasks(node.unit)
         ):
-            self._fetched_meta_for.add(node.ip)
+            self._meta_inflight.add(node.ip)
             self.hass.async_create_task(self._fetch_node_metadata_safe(node))
+
+    def _unit_has_named_tasks(self, unit: int) -> bool:
+        """True once we've learned at least one real (named) task for a unit."""
+        for (u, _), task in self.tasks.items():
+            if u == unit and any(v for v in task.value_names):
+                return True
+        return False
 
     async def _fetch_node_metadata_safe(self, node: NodeInfo) -> None:
         try:
@@ -313,7 +332,10 @@ class ESPEasyP2PCoordinator:
                 "Unhandled error fetching /json for unit %d (%s)",
                 node.unit, node.name,
             )
-            self._fetched_meta_for.discard(node.ip)
+        finally:
+            # Always clear the in-flight guard. If this attempt didn't learn
+            # any named task, the next Type-1 heartbeat will fetch again.
+            self._meta_inflight.discard(node.ip)
 
     @callback
     def _update_device_registry(self, node: NodeInfo) -> None:
@@ -348,13 +370,15 @@ class ESPEasyP2PCoordinator:
             ) as resp:
                 if resp.status != 200:
                     _LOGGER.debug(
-                        "GET %s returned HTTP %d", url, resp.status
+                        "GET %s returned HTTP %d (will retry on next heartbeat)",
+                        url, resp.status,
                     )
                     return
                 data = await resp.json(content_type=None)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
-            _LOGGER.debug("Failed to fetch %s: %s", url, err)
-            self._fetched_meta_for.discard(node.ip)
+            _LOGGER.debug(
+                "Failed to fetch %s: %s (will retry on next heartbeat)", url, err
+            )
             return
 
         # Reaching the node over HTTP is itself proof it is alive. Record it
@@ -522,10 +546,9 @@ class ESPEasyP2PCoordinator:
 
     async def async_refetch_metadata(self) -> None:
         """Force a /json re-fetch for every known node."""
-        self._fetched_meta_for.clear()
         for node in list(self.nodes.values()):
             if node.ip and node.ip != "0.0.0.0":
-                self._fetched_meta_for.add(node.ip)
+                self._meta_inflight.add(node.ip)
                 await self._fetch_node_metadata_safe(node)
 
     async def async_send_raw_command(self, unit: int, command: str) -> dict[str, Any]:
@@ -595,7 +618,7 @@ class ESPEasyP2PCoordinator:
         self.last_seen.pop(unit, None)
         self._offline.discard(unit)
         if node is not None and node.ip:
-            self._fetched_meta_for.discard(node.ip)
+            self._meta_inflight.discard(node.ip)
         # Remove the device entry — HA will tear down its child entities.
         registry = dr.async_get(self.hass)
         device = registry.async_get_device(
