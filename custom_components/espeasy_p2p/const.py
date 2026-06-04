@@ -42,6 +42,12 @@ PACKET_TYPE_COMMAND = 0
 BROADCAST_UNIT = 255
 
 ANNOUNCE_INTERVAL = 30
+# How often we re-read each node's /json to sync the *current* value of every
+# task. This is a safety net for state that never arrives as a C013 push —
+# most importantly a relay that switches itself off via an internal timer/
+# pulse (the node changes the GPIO without broadcasting a Type-5), which would
+# otherwise leave the HA switch stuck "on". Sensors benefit too.
+VALUE_REFRESH_INTERVAL = 30
 # A node is considered offline if no Type-1/Type-5 packet has arrived for
 # this many seconds (3 announce intervals + a safety margin). Affects
 # entity availability only — no state is dropped.
