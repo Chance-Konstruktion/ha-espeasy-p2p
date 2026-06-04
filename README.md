@@ -251,9 +251,19 @@ If the node is offline, the packet is silently dropped. HA marks the entity `una
 | Option | Default | Description |
 | :--- | :--- | :--- |
 | UDP port | `8266` | Must match the controller settings on every node |
-| HA unit number | `0` | ID used in outgoing packets (0 = listener only) |
-| Stale timeout | `300 s` | After this, nodes go `unavailable` |
-| Broadcast interface | auto | Bind to a specific NIC if multi-homed |
+| HA unit number | `250` | Unit ID Home Assistant uses in its own announce packets |
+| HA peer name | `Home Assistant` | Name HA advertises to the C013 mesh |
+| Decimal precision | `3` | Decimal places shown for sensor values (0–6) |
+
+Per-switch GPIO pins and command templates are configured later via the
+integration's **Configure** (options) dialog. The stale/offline timeout
+(120 s) is fixed.
+
+> **Networking:** the integration receives UDP **broadcasts** on port 8266.
+> This only works when Home Assistant can see them on the LAN — i.e. HA OS,
+> Supervised, or a container started with **host networking**
+> (`--network=host`). In a bridged Docker network broadcasts never arrive and
+> no nodes will be discovered.
 
 </details>
 

@@ -35,9 +35,6 @@
           "remove": "Eintrag entfernen"
         }
       }
-    },
-    "abort": {
-      "no_switch_tasks": "Es wurden noch keine schaltbaren Tasks erkannt. Auf den Node warten oder den Dienst 'Knoten suchen' aufrufen, dann diesen Dialog erneut öffnen."
     }
   },
   "services": {

@@ -16,6 +16,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
     ANNOUNCE_INTERVAL,
+    VALUE_REFRESH_INTERVAL,
     BROADCAST_UNIT,
     CONF_COMMAND_MAP,
     CONF_GPIO_PIN_MAP,
@@ -85,6 +86,7 @@ class ESPEasyP2PCoordinator:
         self._transport: asyncio.DatagramTransport | None = None
         self._announce_task: asyncio.Task | None = None
         self._aging_task: asyncio.Task | None = None
+        self._value_task: asyncio.Task | None = None
         # IPs we currently have an in-flight /json fetch for, so concurrent
         # Type-1 heartbeats don't kick off duplicate HTTP requests at once.
         # NOTE: this is deliberately NOT a "fetched once, never again" cache.
@@ -169,9 +171,10 @@ class ESPEasyP2PCoordinator:
         self.async_scan()
         self._announce_task = self.hass.loop.create_task(self._announce_loop())
         self._aging_task = self.hass.loop.create_task(self._aging_loop())
+        self._value_task = self.hass.loop.create_task(self._value_refresh_loop())
 
     async def async_stop(self) -> None:
-        for task_attr in ("_announce_task", "_aging_task"):
+        for task_attr in ("_announce_task", "_aging_task", "_value_task"):
             task = getattr(self, task_attr)
             if task is not None:
                 task.cancel()
@@ -223,6 +226,22 @@ class ESPEasyP2PCoordinator:
             while True:
                 await asyncio.sleep(NODE_AGING_INTERVAL)
                 self._evaluate_availability()
+        except asyncio.CancelledError:
+            pass
+
+    async def _value_refresh_loop(self) -> None:
+        """Periodically re-read /json so entity state reflects reality even
+        when the node never pushes an update (e.g. a self-timing relay)."""
+        try:
+            while True:
+                await asyncio.sleep(VALUE_REFRESH_INTERVAL)
+                for node in list(self.nodes.values()):
+                    if not node.ip or node.ip == "0.0.0.0":
+                        continue
+                    if node.ip in self._meta_inflight:
+                        continue
+                    self._meta_inflight.add(node.ip)
+                    await self._fetch_node_metadata_safe(node)
         except asyncio.CancelledError:
             pass
 
@@ -448,6 +467,34 @@ class ESPEasyP2PCoordinator:
                 )
             )
             learned += 1
+            # Sync the *current* value of each task value from /json. This is
+            # the only way HA learns about state changes the node performed
+            # without broadcasting them — chiefly a relay that switched itself
+            # off via an internal timer/pulse. Only push an update when the
+            # value actually changed, to avoid needless entity re-renders.
+            parsed: list[float] = []
+            saw_number = False
+            for tv in task_values:
+                try:
+                    parsed.append(float(tv.get("Value")))
+                    saw_number = True
+                except (TypeError, ValueError):
+                    parsed.append(0.0)
+            if saw_number:
+                parsed = (parsed + [0.0, 0.0, 0.0, 0.0])[:4]
+                vkey = (node.unit, task_index)
+                if self.values.get(vkey) != parsed:
+                    self.values[vkey] = parsed
+                    async_dispatcher_send(
+                        self.hass,
+                        self._signal(SIGNAL_VALUE_UPDATED),
+                        TaskValues(
+                            src_unit=node.unit,
+                            task_index=task_index,
+                            values=parsed,
+                            src_ip=node.ip,
+                        ),
+                    )
         if learned:
             _LOGGER.info(
                 "Fetched %d task definitions for unit %d (%s) from %s",
