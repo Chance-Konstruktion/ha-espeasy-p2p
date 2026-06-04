@@ -591,6 +591,30 @@ class ESPEasyP2PCoordinator:
             self.hass, self._signal(SIGNAL_VALUE_UPDATED), resolved
         )
 
+    def async_schedule_resync(
+        self, unit: int, delays: tuple[int, ...] = (3, 8, 20)
+    ) -> None:
+        """Re-read one node's /json a few times shortly after we commanded it.
+
+        Cheap, targeted counterpart to the periodic 30 s poll: it only fires
+        when HA itself toggled a switch, hits a single node, and converges
+        fast — so a relay that auto-switches a few seconds later (internal
+        timer/pulse) is reflected without waiting for the next slow poll and
+        without any steady-state overhead.
+        """
+        node = self.nodes.get(unit)
+        if node is None or not node.ip or node.ip == "0.0.0.0":
+            return
+        self.hass.async_create_task(self._resync_burst(node, delays))
+
+    async def _resync_burst(self, node: NodeInfo, delays: tuple[int, ...]) -> None:
+        for delay in delays:
+            await asyncio.sleep(delay)
+            if node.ip in self._meta_inflight:
+                continue
+            self._meta_inflight.add(node.ip)
+            await self._fetch_node_metadata_safe(node)
+
     async def async_refetch_metadata(self) -> None:
         """Force a /json re-fetch for every known node."""
         for node in list(self.nodes.values()):
