@@ -5,6 +5,16 @@ All notable changes to this integration are documented here. Dates use
 version numbers** (`YYMMDD`) instead of semver — they sort chronologically
 and the release date is obvious at a glance.
 
+## Unreleased
+
+### Added
+- **Delete a single node from the UI**: each discovered ESPEasy node is its
+  own Home Assistant device, and the device's three-dot menu now offers
+  **Delete** (via `async_remove_config_entry_device`). You can remove a
+  mis-detected, retired, or replaced node individually without removing and
+  re-adding the whole integration. The node's in-memory state is forgotten,
+  so it only reappears if it sends a fresh Type-1 heartbeat afterwards.
+
 ## 260506
 
 ### Added

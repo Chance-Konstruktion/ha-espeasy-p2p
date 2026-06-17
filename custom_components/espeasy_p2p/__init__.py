@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     CONF_COMMAND_MAP,
@@ -140,6 +141,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DOMAIN, SERVICE_REMOVE_NODE, _handle_remove_node
         )
 
+    return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Allow deleting a single ESPEasy node device from the HA UI.
+
+    Each discovered ESPEasy node is its own device (identifier ``unit-<n>``),
+    so users can delete or replace an individual node without removing and
+    re-adding the whole integration. We forget the node's in-memory state so
+    it only reappears if it sends a fresh Type-1 heartbeat afterwards;
+    returning True lets HA remove the device and its entities.
+    """
+    coordinator: ESPEasyP2PCoordinator | None = hass.data.get(DOMAIN, {}).get(
+        entry.entry_id
+    )
+    if coordinator is not None:
+        for domain, identifier in device_entry.identifiers:
+            if domain == DOMAIN and identifier.startswith("unit-"):
+                try:
+                    unit = int(identifier.removeprefix("unit-"))
+                except ValueError:
+                    continue
+                coordinator.forget_node_state(unit)
+                _LOGGER.info("Removed node unit=%d via device delete", unit)
     return True
 
 
