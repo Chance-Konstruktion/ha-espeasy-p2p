@@ -5,7 +5,7 @@ All notable changes to this integration are documented here. Dates use
 version numbers** (`YYMMDD`) instead of semver — they sort chronologically
 and the release date is obvious at a glance.
 
-## Unreleased
+## 260617
 
 ### Added
 - **Delete a single node from the UI**: each discovered ESPEasy node is its
