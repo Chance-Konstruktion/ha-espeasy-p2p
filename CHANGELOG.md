@@ -40,8 +40,6 @@ and the release date is obvious at a glance.
 ### Changed
 - Switched to date-based version numbers (`YYMMDD`).
 
-## [Unreleased]
-
 ### Added
 - **Options flow for the GPIO pin map**: edit pin assignments via
   *Settings → Devices & Services → ESPEasy P2P → Configure*. One row per
