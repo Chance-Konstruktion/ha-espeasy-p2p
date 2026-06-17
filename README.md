@@ -318,6 +318,20 @@ than relying on HA to catch it.
 Use `espeasy_p2p.reload_unit` or remove the device under **Settings → Devices & Services** and let it rediscover.
 </details>
 
+<details>
+<summary><b>🗑️ Delete or replace a single node</b></summary>
+
+Every discovered ESPEasy node is its **own device**, not part of one big
+integration device. To remove a mis-detected, retired, or replaced node,
+open it under **Settings → Devices & Services → ESPEasy P2P**, click the
+node device, and choose **Delete** from the three-dot menu — no need to
+remove and re-add the whole integration. The `espeasy_p2p.remove_node`
+service does the same thing by unit number. A node only comes back if it
+sends a fresh heartbeat afterwards, so deleting a retired unit makes it
+stay gone.
+</details>
+</details>
+
 ---
 
 ## 🤝 Contributing

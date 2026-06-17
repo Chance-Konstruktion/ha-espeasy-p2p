@@ -670,6 +670,24 @@ class ESPEasyP2PCoordinator:
             _LOGGER.debug("UDP command to %s failed: %s", ip, err)
             return False
 
+    @callback
+    def forget_node_state(self, unit: int) -> None:
+        """Drop all in-memory state for a node without touching the registry.
+
+        Used both by the explicit remove_node service and by the HA UI device
+        delete flow (where HA itself removes the device + entities). Forgetting
+        the state ensures the node only reappears if it sends a fresh Type-1
+        heartbeat afterwards, rather than being re-created immediately.
+        """
+        node = self.nodes.pop(unit, None)
+        for key in [k for k in list(self.tasks) if k[0] == unit]:
+            self.tasks.pop(key, None)
+            self.values.pop(key, None)
+        self.last_seen.pop(unit, None)
+        self._offline.discard(unit)
+        if node is not None and node.ip:
+            self._meta_inflight.discard(node.ip)
+
     async def async_remove_node(self, unit: int) -> bool:
         """Forget a node: drop in-memory state and remove its HA device.
 
@@ -682,14 +700,7 @@ class ESPEasyP2PCoordinator:
         ):
             _LOGGER.warning("remove_node: unit %d not known", unit)
             return False
-        node = self.nodes.pop(unit, None)
-        for key in [k for k in list(self.tasks) if k[0] == unit]:
-            self.tasks.pop(key, None)
-            self.values.pop(key, None)
-        self.last_seen.pop(unit, None)
-        self._offline.discard(unit)
-        if node is not None and node.ip:
-            self._meta_inflight.discard(node.ip)
+        self.forget_node_state(unit)
         # Remove the device entry — HA will tear down its child entities.
         registry = dr.async_get(self.hass)
         device = registry.async_get_device(
