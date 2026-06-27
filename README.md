@@ -8,7 +8,7 @@
 
 Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to **C013 (ESPEasy/RPiEasy P2P)** controller, and they show up in Home Assistant on their own. Every value is pushed the moment it changes. Every relay can be switched back from Lovelace.
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://hacs.xyz/)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=flat-square)](https://hacs.xyz/)
 [![GitHub release](https://img.shields.io/github/v/release/Chance-Konstruktion/ha-espeasy-p2p?style=flat-square&color=18BCF2)](https://github.com/Chance-Konstruktion/ha-espeasy-p2p/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-FF9C2A.svg?style=flat-square)](#-license)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-41BDF5.svg?style=flat-square&logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
@@ -105,8 +105,8 @@ Per-node `last_seen` + an `available` sensor. Quiet nodes go `unavailable` autom
 </td>
 <td>
 
-**🪛 HACS-ready**
-Drop the repo into HACS, restart, add the integration. No YAML.
+**🪛 In default HACS**
+Search, download, restart, add the integration. No YAML, no custom repo.
 
 </td>
 </tr>
@@ -150,13 +150,15 @@ A C013 frame is a small fixed-layout struct with:
 
 ### 1 · Install via HACS
 
+This integration is part of the **default HACS store** — no custom repository needed.
+
 ```text
-HACS → ⋮ → Custom repositories
-URL:  https://github.com/Chance-Konstruktion/ha-espeasy-p2p
-Type: Integration
+HACS → Integrations → search "ESPEasy P2P" → Download
 ```
 
-Then search **"ESPEasy P2P"** in HACS, install, and restart Home Assistant.
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Chance-Konstruktion&repository=ha-espeasy-p2p&category=integration)
+
+Download, then restart Home Assistant.
 
 ### 2 · Add the integration
 

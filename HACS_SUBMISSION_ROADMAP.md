@@ -1,5 +1,10 @@
 # HACS Submission Roadmap – ha-espeasy-p2p
 
+> ✅ **ERLEDIGT — die Integration ist offiziell in HACS-Default aufgenommen.**
+> Dieses Dokument bleibt nur als historische Referenz / Checkliste erhalten.
+> Für Nutzer: Installation läuft jetzt direkt über den HACS-Store
+> (kein Custom-Repo mehr nötig) — siehe README.
+
 Brand-Assets liegen im Repo unter `custom_components/espeasy_p2p/brand/`
 (neue HA-2026.3+ Konvention; siehe Schritt 2).
 
@@ -113,8 +118,8 @@ Für die Aufnahme in HACS-Default zwingend vorhanden:
 - [x] Tests-Skeleton
 - [x] Brand-Assets in `custom_components/espeasy_p2p/brand/` (256/512 Icon, 128/256 Logo)
 - [x] 2 GitHub-Releases vorhanden
-- [ ] GitHub-Repo Topics + About gesetzt → **Schritt 1**
-- [ ] HACS-Default-PR offen/gemerged → **Schritt 3**
+- [x] GitHub-Repo Topics + About gesetzt → **Schritt 1**
+- [x] HACS-Default-PR gemerged → **Schritt 3** ✅ aufgenommen
 
 ---
 
