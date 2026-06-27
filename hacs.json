@@ -1,6 +1,6 @@
 {
   "name": "ESPEasy P2P",
-  "render_readme": true,
+  "render_readme": false,
   "homeassistant": "2024.1.0",
   "zip_release": false
 }
