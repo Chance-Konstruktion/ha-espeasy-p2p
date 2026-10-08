@@ -162,6 +162,8 @@ Download, then restart Home Assistant.
 
 ### 2 · Add the integration
 
+[![Open your Home Assistant instance and start setting up the integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=espeasy_p2p)
+
 ```text
 Settings → Devices & Services → + Add Integration → "ESPEasy P2P"
 ```
