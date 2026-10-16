@@ -184,3 +184,44 @@ def test_die_nutzlast_ueberlebt_den_websocket(besetzt):
     eigene Klasse in den Metadaten nimmt das ganze Modell mit -- fuer
     jeden Anbieter, nicht nur diesen."""
     json.dumps(besetzt["data"]())
+
+
+# ── Signale ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "signal", ["node_discovered", "node_removed", "node_availability"]
+)
+async def test_ein_knotensignal_erreicht_den_hub(hass, eintrag, signal):
+    """Ein Knotensignal wird zu SIGNAL_DATA_UPDATED -- auf dem Event-Loop.
+
+    Bis SDK 7 hing am Signal ein nacktes ``lambda``. Der Dispatcher von
+    Home Assistant haelt so etwas fuer blockierenden Code und schickt es in
+    den Executor; dort ruft ``async_notify`` dann ``async_dispatcher_send``
+    aus einem fremden Thread, HA 2026.10 bricht das mit "calls
+    async_dispatcher_send from a thread other than the event loop" ab, und
+    der Hub hoert nie davon. Nur im Log steht es -- deshalb prueft dieser
+    Test, dass die Meldung ankommt, nicht bloss, dass nichts abstuerzt.
+    """
+    from homeassistant.core import callback
+    from homeassistant.helpers.dispatcher import (
+        async_dispatcher_connect,
+        async_dispatcher_send,
+    )
+
+    from custom_components.espeasy_p2p.spatial_hub_provider import (
+        SIGNAL_DATA_UPDATED,
+    )
+
+    _registrierung(hass, eintrag, KoordinatorDoppel())
+    gehoert = []
+    async_dispatcher_connect(
+        hass, SIGNAL_DATA_UPDATED, callback(lambda pid: gehoert.append(pid))
+    )
+
+    async_dispatcher_send(
+        hass, f"espeasy_p2p_{signal}_{eintrag.entry_id}", _einheit(1, "Keller")
+    )
+    await hass.async_block_till_done()
+
+    assert gehoert == [EIGENE_DOMAIN]
