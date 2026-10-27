@@ -6,7 +6,7 @@
 
 **Push-first, local bridge between ESPEasy & RPiEasy nodes and Home Assistant — no MQTT or cloud, with a 30-second HTTP resync safety net.**
 
-Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to **C013 (ESPEasy/RPiEasy P2P)** controller, and they show up in Home Assistant on their own. Every value is pushed the moment it changes. Every relay can be switched back from Lovelace.
+Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to the **C013 (ESPEasy/RPiEasy P2P)** controller, and they can appear in Home Assistant automatically. Readings normally arrive via C013 broadcasts; a 30-second `/json` refresh catches state changes the node does not broadcast. Tasks with recognized state-like value names can be controlled from Lovelace.
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=flat-square)](https://hacs.xyz/)
 [![GitHub release](https://img.shields.io/github/v/release/Chance-Konstruktion/ha-espeasy-p2p?style=flat-square&color=18BCF2)](https://github.com/Chance-Konstruktion/ha-espeasy-p2p/releases)
@@ -207,7 +207,7 @@ Two-way control is supported for tasks that map to writable GPIOs.
 
 When you flip a switch in Lovelace, `espeasy_p2p` sends a **unicast** C013 frame to the node's last-seen IP with the target task index and the new value. The node executes the command locally — no acknowledgement is required because the next sensor broadcast confirms the new state.
 
-If the node is offline, the packet is silently dropped. HA marks the entity `unavailable` after the per-node timeout (120 seconds without C013 traffic or a successful `/json` refresh).
+There is no end-to-end acknowledgement for C013 commands. A switch's HTTP command path reports failures and leaves its displayed state unchanged on an unsuccessful command. Entities become `unavailable` after 120 seconds without a received packet or a successful `/json` refresh.
 
 </details>
 
@@ -215,7 +215,7 @@ If the node is offline, the packet is silently dropped. HA marks the entity `una
 <summary><b>Known limitations</b></summary>
 
 - **No encryption.** C013 is plain UDP — keep it on a trusted VLAN.
-- **No retries.** One packet per click. Use HA automations + `last_seen` if you need delivery guarantees.
+- **No C013 acknowledgement.** The HTTP command path provides a best-effort fallback, but this is not a delivery guarantee. Automations should check the switch's resulting state and entity availability.
 - **Unit numbers must be unique** across your LAN. Duplicate IDs = entity collisions.
 
 </details>
