@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -31,8 +29,6 @@ from .const import (
 )
 from .coordinator import ESPEasyP2PCoordinator
 from .protocol import TaskConfig, TaskValues
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def _is_switch_value(value_name: str) -> bool:
