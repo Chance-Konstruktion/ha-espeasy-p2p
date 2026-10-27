@@ -227,6 +227,27 @@ async def test_plugin_als_rueckfallebene_fuer_deutsche_namen(
     assert hass.states.get(entity_id).attributes["device_class"] == "temperature"
 
 
+async def test_dht_plugin_keeps_humidity_value_as_humidity(
+    integriert, hass: HomeAssistant
+) -> None:
+    """A DHT plugin exposes multiple differently typed value slots."""
+    _online(integriert)
+    aufgabe = _task(werte=["Temperature", "Humidity", "", ""])
+    aufgabe.plugin_type = "Environment - DHT22"
+    integriert._on_task(aufgabe)
+    await hass.async_block_till_done()
+
+    temperatur_id = await _sensor_entity_id(hass, 5, 0, 0)
+    feuchte_id = await _sensor_entity_id(hass, 5, 0, 1)
+    temperatur = hass.states.get(temperatur_id)
+    feuchte = hass.states.get(feuchte_id)
+
+    assert temperatur.attributes["device_class"] == "temperature"
+    assert temperatur.attributes["unit_of_measurement"] == "°C"
+    assert feuchte.attributes["device_class"] == "humidity"
+    assert feuchte.attributes["unit_of_measurement"] == "%"
+
+
 async def test_namenloser_task_bekommt_slotnamen(
     integriert, hass: HomeAssistant
 ) -> None:

@@ -710,7 +710,7 @@ class ESPEasyP2PCoordinator:
                 ent_reg, device.id, include_disabled_entities=True
             ):
                 ent_reg.async_remove(ent.entity_id)
-            registry.async_remove_device(device.id)
+            dr.async_get(self.hass).async_remove_device(device.id)
         async_dispatcher_send(self.hass, self._signal(SIGNAL_NODE_REMOVED), unit)
         _LOGGER.info("Removed node unit=%d", unit)
         return True

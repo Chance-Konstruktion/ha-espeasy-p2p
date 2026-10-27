@@ -129,25 +129,22 @@ async def test_remove_node_dienst_ohne_geraet(
     assert integriert.tasks == {}
 
 
-async def test_remove_node_dienst_mit_geraet_bricht_mit_nameerror(
+async def test_remove_node_dienst_mit_geraet_entfernt_geraet(
     integriert, hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
-    """GEFUNDENER FEHLER (siehe BERICHT.md), bis zum Dienstaufruf durch:
-    async_remove_node laeuft in einen NameError, sobald der Knoten einen
-    Geraeteeintrag hat -- der normale Fall im Betrieb. Der Test belegt,
-    dass die Ausnahme aus dem Dienst nach oben durchschlägt."""
-    dr.async_get(hass).async_get_or_create(
+    geraet = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "unit-5")},
         name="Keller",
     )
     integriert.nodes[5] = knoten(5, ip="0.0.0.0")
 
-    with pytest.raises(NameError, match="registry"):
-        await hass.services.async_call(
-            DOMAIN, "remove_node", {"unit": 5}, blocking=True
-        )
+    await hass.services.async_call(
+        DOMAIN, "remove_node", {"unit": 5}, blocking=True
+    )
 
+    assert integriert.nodes == {}
+    assert device_for_unit(hass, 5) is None
 
 async def test_remove_node_unbekannte_einheit(
     integriert, hass: HomeAssistant, caplog
