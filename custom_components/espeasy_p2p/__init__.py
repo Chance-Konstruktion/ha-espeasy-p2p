@@ -107,6 +107,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             unit = int(call.data["unit"])
             task_name = str(call.data["task_name"]).strip()
             pin = int(call.data["pin"])
+            # The selector in services.yaml is a frontend hint, not a
+            # server-side invariant: scripts can call services directly.
+            if not 0 <= pin <= 40:
+                _LOGGER.warning(
+                    "set_gpio_pin: pin %d outside supported range 0..40", pin
+                )
+                return
+            if not task_name:
+                _LOGGER.warning("set_gpio_pin: task_name must not be empty")
+                return
             for entry_id, c in hass.data.get(DOMAIN, {}).items():
                 if unit not in c.nodes:
                     continue

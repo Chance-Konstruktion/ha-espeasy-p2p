@@ -105,6 +105,38 @@ async def test_set_gpio_pin_dienst_persistiert(
     assert entry.options["gpio_pin_map"] == {"5/Relais": 26}
 
 
+
+
+async def test_set_gpio_pin_dienst_lehnt_ungueltige_pins_ab(
+    integriert, hass: HomeAssistant, caplog
+) -> None:
+    integriert.nodes[5] = knoten(5)
+
+    for pin in (-1, 41, 999):
+        await hass.services.async_call(
+            DOMAIN, "set_gpio_pin",
+            {"unit": 5, "task_name": "Relais", "pin": pin},
+            blocking=True,
+        )
+
+    assert integriert.pin_overrides == {}
+    assert "outside supported range 0..40" in caplog.text
+
+
+async def test_set_gpio_pin_dienst_lehnt_leeren_tasknamen_ab(
+    integriert, hass: HomeAssistant, caplog
+) -> None:
+    integriert.nodes[5] = knoten(5)
+
+    await hass.services.async_call(
+        DOMAIN, "set_gpio_pin",
+        {"unit": 5, "task_name": "   ", "pin": 13},
+        blocking=True,
+    )
+
+    assert integriert.pin_overrides == {}
+    assert "task_name must not be empty" in caplog.text
+
 async def test_set_gpio_pin_unbekannte_einheit(
     integriert, hass: HomeAssistant, caplog
 ) -> None:
