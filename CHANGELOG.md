@@ -11,6 +11,7 @@ and the release date is obvious at a glance.
 - Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.
 - Invalid `TaskNumber` values in a node's `/json` response are skipped individually instead of aborting metadata processing for every later task.
 - The `set_gpio_pin` service now validates pin range and non-empty task names server-side, even when called outside the UI.
+- Non-finite sensor readings (NaN and infinities) are ignored so invalid measurements do not poison sensor states or make a switch appear off.
 - Periodic and explicit `/json` refreshes run with a bounded concurrency of four requests, so slow nodes do not serially delay every other node.
 - A failed Home Assistant platform unload no longer stops and removes the coordinator still referenced by loaded entities.
 - Removed the unused `_State` dataclass from the protocol module.

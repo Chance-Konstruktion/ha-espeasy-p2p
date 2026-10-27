@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from typing import Any
 
@@ -545,16 +546,20 @@ class ESPEasyP2PCoordinator:
             # value actually changed, to avoid needless entity re-renders.
             parsed: list[float] = []
             saw_number = False
+            invalid_numeric = False
             for tv in task_values:
                 if not isinstance(tv, dict):
                     parsed.append(0.0)
                     continue
                 try:
-                    parsed.append(float(tv.get("Value")))
+                    value = float(tv.get("Value"))
+                    if not math.isfinite(value):
+                        invalid_numeric = True
+                    parsed.append(value)
                     saw_number = True
                 except (TypeError, ValueError):
                     parsed.append(0.0)
-            if saw_number:
+            if saw_number and not invalid_numeric:
                 parsed = (parsed + [0.0, 0.0, 0.0, 0.0])[:4]
                 vkey = (node.unit, task_index)
                 if self.values.get(vkey) != parsed:
@@ -673,9 +678,18 @@ class ESPEasyP2PCoordinator:
                 except OSError as err:
                     _LOGGER.debug("Probe announce to %s failed: %s", payload.src_ip, err)
             return
+        self._touch(src_unit)
+        if any(not math.isfinite(value) for value in payload.values):
+            # Invalid measurements must not turn a switch into "off" (NaN
+            # compares false) or poison numeric sensor states. Packet receipt
+            # still counts as a heartbeat, but the previous values stay put.
+            _LOGGER.debug(
+                "Ignoring non-finite sensor values from unit=%d task=%d",
+                src_unit, payload.task_index,
+            )
+            return
         key = (src_unit, payload.task_index)
         self.values[key] = payload.values
-        self._touch(src_unit)
         # Track that this (unit, task) is alive even before we know the
         # real names. We deliberately do NOT create entities here from a
         # placeholder TaskConfig — the user does not want phantom "Task X

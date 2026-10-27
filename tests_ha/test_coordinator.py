@@ -239,6 +239,24 @@ async def test_registry_fehler_zerreisst_die_entdeckung_nicht(
 # ── Werte und der Broadcast-Sonderfall ────────────────────────────────
 
 
+
+
+def test_nichtendliche_c013_werte_vergiften_den_zustand_nicht(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    koordinator.values[(5, 0)] = [21.5, 45.0, 1000.0, 0.0]
+    koordinator.nodes[5] = knoten(5)
+    updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
+
+    koordinator._on_values(
+        _werte(5, 0, [float("nan"), float("inf"), float("-inf"), 99.0])
+    )
+
+    assert koordinator.values[(5, 0)] == [21.5, 45.0, 1000.0, 0.0]
+    assert updates == []
+    assert koordinator.is_unit_online(5)
+
+
 def test_werte_von_bekannter_einheit_landen_im_zustand(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
 ) -> None:
@@ -565,6 +583,29 @@ async def test_json_ohne_aenderung_feuert_kein_wertsignal(
 
     assert koordinator.values[(5, 1)] == [7.0, 0.0, 0.0, 0.0]
     assert len(wert_signale) == 1, "gleiche Werte: keine Updates, kein Flackern"
+
+
+
+
+async def test_json_nan_ueberschreibt_keinen_letzten_gueltigen_wert(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
+) -> None:
+    aioclient_mock.request(
+        "GET",
+        f"http://{TEST_IP}:80/json",
+        json=_sensors_nutzlast(
+            [{"TaskNumber": 1, "TaskName": "Klima",
+              "TaskValues": [{"Name": "Temperature", "Value": "NaN"}]}]
+        ),
+    )
+    koordinator.nodes[5] = knoten(5)
+    koordinator.values[(5, 0)] = [21.5, 0.0, 0.0, 0.0]
+    updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
+
+    await koordinator._fetch_node_metadata_safe(koordinator.nodes[5])
+
+    assert koordinator.values[(5, 0)] == [21.5, 0.0, 0.0, 0.0]
+    assert updates == []
 
 
 async def test_json_deaktivierte_aufgabe_wird_uebersprungen(
