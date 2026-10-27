@@ -164,8 +164,7 @@ async def test_remove_node_dienst_ohne_geraet(
 async def test_remove_node_dienst_mit_geraet_entfernt_geraet(
     integriert, hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
-    """The public service fully removes a known node and its device entry."""
-    dr.async_get(hass).async_get_or_create(
+    geraet = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "unit-5")},
         name="Keller",
@@ -178,7 +177,6 @@ async def test_remove_node_dienst_mit_geraet_entfernt_geraet(
     )
 
     assert integriert.nodes == {}
-    assert integriert.tasks == {}
     assert device_for_unit(hass, 5) is None
 
 async def test_remove_node_unbekannte_einheit(

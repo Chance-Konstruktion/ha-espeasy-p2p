@@ -869,10 +869,10 @@ async def test_remove_node_ohne_geraet_allein_moeglich(
     assert koordinator.nodes == {}
 
 
-async def test_remove_node_mit_geraet_entfernt_entitaeten_geraet_und_signal(
+async def test_remove_node_mit_geraet_entfernt_geraet_und_signal(
     hass: HomeAssistant, entry: MockConfigEntry, koordinator: ESPEasyP2PCoordinator
 ) -> None:
-    """A node with a registry device must be fully removed without exceptions."""
+    """Ein kompletter Loeschlauf entfernt Entitaeten und Geraet und feuert das Signal."""
     geraet = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "unit-5")},
@@ -890,7 +890,7 @@ async def test_remove_node_mit_geraet_entfernt_entitaeten_geraet_und_signal(
     assert await koordinator.async_remove_node(5) is True
 
     assert 5 not in koordinator.nodes
-    assert (5, 0) not in koordinator.tasks
+    assert all(unit != 5 for unit, _ in koordinator.tasks)
     assert (5, 0) not in koordinator.values
     assert ent_reg.async_get(entitaet.entity_id) is None
     assert device_for_unit(hass, 5) is None
