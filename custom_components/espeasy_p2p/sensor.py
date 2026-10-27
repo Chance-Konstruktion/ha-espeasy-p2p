@@ -221,7 +221,12 @@ class ESPEasyP2PValueSensor(SensorEntity):
         # leave its entities stuck "unavailable" even though the node is up and
         # discovered. `native_value` returns None until the first value lands,
         # so the entity shows "unknown" rather than "unavailable" in the gap.
-        return self._coordinator.is_unit_online(self._src_unit)
+        task = self._task()
+        return (
+            task is not None
+            and task.enabled
+            and self._coordinator.is_unit_online(self._src_unit)
+        )
 
 
 def _classify(
@@ -239,14 +244,19 @@ def _classify(
     if 0 <= value_index < len(task.value_names):
         value_name = task.value_names[value_index].strip().lower()
     plugin = task.plugin_type.lower()
-    # A task such as DHT22 can expose both temperature and humidity.
-    # Its plugin type is only a fallback: the value name must take precedence.
-    if "temperature" in value_name:
-        return (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
+    # Explicit value names are more precise than the plugin type: a DHT
+    # task commonly exposes both Temperature and Humidity slots.
     if "humidity" in value_name:
         return (SensorDeviceClass.HUMIDITY, PERCENTAGE)
     if "pressure" in value_name:
         return (SensorDeviceClass.PRESSURE, UnitOfPressure.HPA)
+    if "illuminance" in value_name or "lux" in value_name.split():
+        # "lx" is the canonical HA unit; keep this compatible with supported
+        # Home Assistant versions that do not export an illuminance unit enum.
+        return (SensorDeviceClass.ILLUMINANCE, "lx")
+    if "temperature" in value_name:
+        return (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
+    # Plugin type is only a fallback when the value name is not descriptive.
     if "ds18b20" in plugin or "dht" in plugin:
         return (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
     return (None, None)

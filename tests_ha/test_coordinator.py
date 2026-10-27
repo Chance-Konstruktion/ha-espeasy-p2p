@@ -108,6 +108,62 @@ async def test_wiederholtes_lebenszeichen_ist_kein_neuer_knoten(
     assert koordinator.nodes[5].name == "Keller neu"
 
 
+
+
+
+def test_benannter_task_meldet_neue_slots_und_umbenennungen(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    updates = signal_sammler(hass, koordinator, SIGNAL_TASK_DISCOVERED)
+    koordinator._on_task(task_config(name="Klima", werte=["Temperature", "", "", ""]))
+    koordinator._on_task(
+        task_config(name="Klima", werte=["Temperature", "Humidity", "", ""])
+    )
+    koordinator._on_task(
+        task_config(name="Raumklima", werte=["Temperature", "Humidity", "", ""])
+    )
+
+    assert [task.task_name for task in updates] == ["Klima", "Klima", "Raumklima"]
+    assert updates[1].value_names[1] == "Humidity"
+
+
+def test_c013_taskpakete_loeschen_keine_json_metadaten(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    json_task = TaskConfig(
+        src_unit=5, task_index=0, device_number=0,
+        task_name="Relais", value_names=["State", "", "", ""],
+        plugin_type="Output - GPIO", enabled=False, gpio_pin=26,
+    )
+    koordinator._on_task(json_task)
+    updates = signal_sammler(hass, koordinator, SIGNAL_TASK_DISCOVERED)
+
+    # Type-3 carries names and a plugin number, but not these HTTP fields.
+    c013_task = task_config(name="Relais", werte=["State", "", "", ""])
+    koordinator._on_task(c013_task)
+    merged = koordinator.tasks[(5, 0)]
+    assert merged.device_number == 33
+    assert merged.plugin_type == "Output - GPIO"
+    assert merged.enabled is False
+    assert merged.gpio_pin == 26
+
+    # Identical Type-3 packets are not UI updates.
+    koordinator._on_task(task_config(name="Relais", werte=["State", "", "", ""]))
+    assert updates == []
+
+    # A later HTTP snapshot can update its own fields without losing the ID.
+    koordinator._on_task(
+        TaskConfig(
+            src_unit=5, task_index=0, device_number=0,
+            task_name="Relais", value_names=["State", "", "", ""],
+            plugin_type="Output - GPIO", enabled=True, gpio_pin=13,
+        )
+    )
+    assert koordinator.tasks[(5, 0)].device_number == 33
+    assert koordinator.tasks[(5, 0)].enabled is True
+    assert koordinator.tasks[(5, 0)].gpio_pin == 13
+    assert len(updates) == 1
+
 def test_eigenes_echo_wird_ignoriert(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
 ) -> None:
@@ -181,6 +237,24 @@ async def test_registry_fehler_zerreisst_die_entdeckung_nicht(
 
 
 # ── Werte und der Broadcast-Sonderfall ────────────────────────────────
+
+
+
+
+def test_nichtendliche_c013_werte_vergiften_den_zustand_nicht(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    koordinator.values[(5, 0)] = [21.5, 45.0, 1000.0, 0.0]
+    koordinator.nodes[5] = knoten(5)
+    updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
+
+    koordinator._on_values(
+        _werte(5, 0, [float("nan"), float("inf"), float("-inf"), 99.0])
+    )
+
+    assert koordinator.values[(5, 0)] == [21.5, 45.0, 1000.0, 0.0]
+    assert updates == []
+    assert koordinator.is_unit_online(5)
 
 
 def test_werte_von_bekannter_einheit_landen_im_zustand(
@@ -341,6 +415,48 @@ def _sensors_nutzlast(sensors: list[dict]) -> dict:
     return {"Sensors": sensors}
 
 
+
+
+async def test_refetch_metadata_begrenzt_parallelitaet_und_verkuerzt_wartezeit(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, monkeypatch
+) -> None:
+    active = 0
+    max_active = 0
+
+    class FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.005)
+            return self
+
+        async def __aexit__(self, *_args):
+            nonlocal active
+            active -= 1
+
+        async def json(self, content_type=None):
+            await asyncio.sleep(0.005)
+            return {"Sensors": []}
+
+    class FakeSession:
+        def get(self, _url, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        coordinator_modul, "async_get_clientsession", lambda _hass: FakeSession()
+    )
+    for unit in range(5, 14):
+        koordinator.nodes[unit] = knoten(unit, ip=f"192.0.2.{unit}")
+
+    await koordinator.async_refetch_metadata()
+
+    assert max_active == 4, "requests are concurrent but bounded"
+    assert active == 0
+    assert koordinator._meta_inflight == set()
+
 async def test_json_lernt_namen_und_synchronisiert_werte(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
 ) -> None:
@@ -382,6 +498,74 @@ async def test_json_lernt_namen_und_synchronisiert_werte(
     assert koordinator._meta_inflight == set(), "In-Flight-Marke immer raeumen"
 
 
+
+
+
+async def test_json_task_mit_ungueltiger_tasknummer_blockiert_nicht_die_restlichen(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
+) -> None:
+    aioclient_mock.request(
+        "GET",
+        f"http://{TEST_IP}:80/json",
+        json=_sensors_nutzlast(
+            [
+                None,
+                {"TaskNumber": "not-a-number", "TaskName": "Kaputt",
+                 "TaskValues": [{"Name": "V", "Value": 1}]},
+                {"TaskNumber": 1, "TaskName": "Valide",
+                 "TaskValues": [None, {"Name": "Temperature", "Value": 21.5}]},
+            ]
+        ),
+    )
+    koordinator.nodes[5] = knoten(5)
+
+    await koordinator._fetch_node_metadata_safe(koordinator.nodes[5])
+
+    assert (5, 0) in koordinator.tasks
+    assert koordinator.tasks[(5, 0)].task_name == "Valide"
+    assert koordinator.tasks[(5, 0)].value_names == ["", "Temperature", "", ""]
+    assert koordinator.values[(5, 0)] == [0.0, 21.5, 0.0, 0.0]
+
+
+async def test_veraltete_json_antwort_stellt_entfernten_knoten_nicht_wieder_her(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, monkeypatch
+) -> None:
+    node = knoten(5)
+
+    class DelayedResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def json(self, content_type=None):
+            # Simulate deletion while the HTTP response is still in flight.
+            koordinator.forget_node_state(5)
+            return _sensors_nutzlast(
+                [{"TaskNumber": 1, "TaskName": "Alt",
+                  "TaskValues": [{"Name": "Temperature", "Value": 19.0}]}]
+            )
+
+    class FakeSession:
+        def get(self, _url, **_kwargs):
+            return DelayedResponse()
+
+    monkeypatch.setattr(
+        coordinator_modul, "async_get_clientsession", lambda _hass: FakeSession()
+    )
+    koordinator.nodes[5] = node
+
+    await koordinator._fetch_node_metadata_safe(node)
+
+    assert 5 not in koordinator.nodes
+    assert koordinator.tasks == {}
+    assert koordinator.values == {}
+    assert koordinator.last_seen == {}
+
+
 async def test_json_ohne_aenderung_feuert_kein_wertsignal(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
 ) -> None:
@@ -399,6 +583,29 @@ async def test_json_ohne_aenderung_feuert_kein_wertsignal(
 
     assert koordinator.values[(5, 1)] == [7.0, 0.0, 0.0, 0.0]
     assert len(wert_signale) == 1, "gleiche Werte: keine Updates, kein Flackern"
+
+
+
+
+async def test_json_nan_ueberschreibt_keinen_letzten_gueltigen_wert(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
+) -> None:
+    aioclient_mock.request(
+        "GET",
+        f"http://{TEST_IP}:80/json",
+        json=_sensors_nutzlast(
+            [{"TaskNumber": 1, "TaskName": "Klima",
+              "TaskValues": [{"Name": "Temperature", "Value": "NaN"}]}]
+        ),
+    )
+    koordinator.nodes[5] = knoten(5)
+    koordinator.values[(5, 0)] = [21.5, 0.0, 0.0, 0.0]
+    updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
+
+    await koordinator._fetch_node_metadata_safe(koordinator.nodes[5])
+
+    assert koordinator.values[(5, 0)] == [21.5, 0.0, 0.0, 0.0]
+    assert updates == []
 
 
 async def test_json_deaktivierte_aufgabe_wird_uebersprungen(
@@ -798,6 +1005,28 @@ async def test_resync_burst_holt_mehrfach_und_ueberspringt_inflight(
     await koordinator._resync_burst(node, (0,))
     assert aioclient_mock.call_count == aufrufe
     koordinator._meta_inflight.discard(TEST_IP)
+
+
+
+
+
+async def test_knoten_entfernen_bricht_geplanten_resync_ab(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    koordinator.nodes[5] = knoten(5)
+    koordinator.async_schedule_resync(5, delays=(3600,))
+    await asyncio.sleep(0)
+
+    assert any(unit == 5 for unit in koordinator._background_tasks.values())
+
+    assert await koordinator.async_remove_node(5) is True
+    await hass.async_block_till_done()
+    # Let asyncio run task done-callbacks that remove completed jobs from
+    # the coordinator's ownership map.
+    await asyncio.sleep(0)
+
+    assert koordinator._background_tasks == {}
+    assert koordinator._meta_inflight == set()
 
 
 async def test_geplanter_resync_fuehrt_zu_json_abfrage(

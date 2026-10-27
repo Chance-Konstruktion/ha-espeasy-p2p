@@ -85,8 +85,8 @@ Toggle relays, GPIOs and PWM from Lovelace — outgoing C013 packets, just like 
 <tr>
 <td>
 
-**🧭 Unit-aware**
-HA picks the right device class and unit (°C, %, hPa, lx) from the ESPEasy plugin ID.
+**🧭 Unit-aware for common measurements**
+Explicit value names map temperature, humidity, pressure and illuminance to Home Assistant device classes and units. Other named values remain numeric sensors without inferred units.
 
 </td>
 <td>

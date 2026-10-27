@@ -21,7 +21,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.espeasy_p2p import async_setup_entry
+from custom_components.espeasy_p2p import async_setup_entry, async_unload_entry
 from custom_components.espeasy_p2p.const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -105,6 +105,38 @@ async def test_set_gpio_pin_dienst_persistiert(
     assert entry.options["gpio_pin_map"] == {"5/Relais": 26}
 
 
+
+
+async def test_set_gpio_pin_dienst_lehnt_ungueltige_pins_ab(
+    integriert, hass: HomeAssistant, caplog
+) -> None:
+    integriert.nodes[5] = knoten(5)
+
+    for pin in (-1, 41, 999):
+        await hass.services.async_call(
+            DOMAIN, "set_gpio_pin",
+            {"unit": 5, "task_name": "Relais", "pin": pin},
+            blocking=True,
+        )
+
+    assert integriert.pin_overrides == {}
+    assert "outside supported range 0..40" in caplog.text
+
+
+async def test_set_gpio_pin_dienst_lehnt_leeren_tasknamen_ab(
+    integriert, hass: HomeAssistant, caplog
+) -> None:
+    integriert.nodes[5] = knoten(5)
+
+    await hass.services.async_call(
+        DOMAIN, "set_gpio_pin",
+        {"unit": 5, "task_name": "   ", "pin": 13},
+        blocking=True,
+    )
+
+    assert integriert.pin_overrides == {}
+    assert "task_name must not be empty" in caplog.text
+
 async def test_set_gpio_pin_unbekannte_einheit(
     integriert, hass: HomeAssistant, caplog
 ) -> None:
@@ -138,6 +170,7 @@ async def test_remove_node_dienst_mit_geraet_entfernt_geraet(
         name="Keller",
     )
     integriert.nodes[5] = knoten(5, ip="0.0.0.0")
+    integriert.tasks[(5, 0)] = type("T", (), {"src_unit": 5, "task_index": 0})()
 
     await hass.services.async_call(
         DOMAIN, "remove_node", {"unit": 5}, blocking=True
@@ -225,6 +258,29 @@ async def test_entladen_klemmt_alles_ab(
         assert not hass.services.has_service(DOMAIN, dienst), dienst
     assert integriert._transport is None, "der UDP-Sockel ist zu"
 
+
+
+
+
+async def test_fehlgeschlagenes_platform_unload_belaesst_koordinator_und_dienste(
+    integriert, hass: HomeAssistant, entry: MockConfigEntry, monkeypatch
+) -> None:
+    """A failed platform unload must not orphan remaining entities."""
+    original = hass.config_entries.async_unload_platforms
+
+    async def fail_unload(_entry, _platforms):
+        return False
+
+    monkeypatch.setattr(hass.config_entries, "async_unload_platforms", fail_unload)
+    try:
+        result = await async_unload_entry(hass, entry)
+    finally:
+        monkeypatch.setattr(hass.config_entries, "async_unload_platforms", original)
+
+    assert result is False
+    assert hass.data[DOMAIN][entry.entry_id] is integriert
+    assert integriert._transport is not None
+    assert hass.services.has_service(DOMAIN, "scan")
 
 async def test_leerer_eintrag_bekommt_die_defaults_zurueckgeschrieben(
     hass: HomeAssistant, monkeypatch, socket_enabled, enable_custom_integrations

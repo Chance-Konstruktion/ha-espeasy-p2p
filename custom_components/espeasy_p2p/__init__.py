@@ -107,6 +107,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             unit = int(call.data["unit"])
             task_name = str(call.data["task_name"]).strip()
             pin = int(call.data["pin"])
+            # The selector in services.yaml is a frontend hint, not a
+            # server-side invariant: scripts can call services directly.
+            if not 0 <= pin <= 40:
+                _LOGGER.warning(
+                    "set_gpio_pin: pin %d outside supported range 0..40", pin
+                )
+                return
+            if not task_name:
+                _LOGGER.warning("set_gpio_pin: task_name must not be empty")
+                return
             for entry_id, c in hass.data.get(DOMAIN, {}).items():
                 if unit not in c.nodes:
                     continue
@@ -185,6 +195,11 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        # Home Assistant may still have entities loaded. Keep their coordinator,
+        # listener and services alive so a failed unload does not orphan them.
+        return False
+
     coordinator: ESPEasyP2PCoordinator | None = hass.data.get(DOMAIN, {}).pop(
         entry.entry_id, None
     )
@@ -196,4 +211,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_remove(DOMAIN, SERVICE_SEND_COMMAND)
         hass.services.async_remove(DOMAIN, SERVICE_SET_GPIO_PIN)
         hass.services.async_remove(DOMAIN, SERVICE_REMOVE_NODE)
-    return unload_ok
+    return True

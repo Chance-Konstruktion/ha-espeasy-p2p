@@ -193,6 +193,9 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def available(self) -> bool:
+        task = self._coordinator.tasks.get((self._src_unit, self._task_index))
+        if task is None or not task.enabled:
+            return False
         if not self._coordinator.is_unit_online(self._src_unit):
             return False
         node = self._coordinator.nodes.get(self._src_unit)
