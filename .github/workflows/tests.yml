@@ -7,18 +7,28 @@ on:
 
 jobs:
   pytest:
-    name: pytest
+    name: pytest (adapter and protocol)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # No Home Assistant: the floor-plan conformance kit is built to run
-      # without it, and tests/conftest.py stubs the two helpers the adapter
-      # actually touches. Anything more would be a 300 MB dependency for
-      # two lookups.
+      # The conformance/protocol suite uses small Home Assistant stubs.
       - name: Install test dependencies
         run: pip install pytest pytest-asyncio
       - name: Run unit tests
         run: python -m pytest -q
+
+  pytest-ha:
+    name: Home Assistant integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: pip install -r requirements_test_ha.txt
+      - name: Run integration tests
+        run: python -m pytest -c pytest-ha.ini -q
