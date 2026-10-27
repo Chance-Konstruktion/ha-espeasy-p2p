@@ -492,6 +492,7 @@ class ESPEasyP2PCoordinator:
                 else:
                     enabled = str(enabled_raw).strip().lower() in ("true", "1")
                 if not enabled:
+                    self._mark_task_disabled(node.unit, task_index)
                     continue
             else:
                 enabled = True
@@ -579,6 +580,29 @@ class ESPEasyP2PCoordinator:
                 "Fetched %d task definitions for unit %d (%s) from %s",
                 learned, node.unit, node.name, url,
             )
+
+    @callback
+    def _mark_task_disabled(self, unit: int, task_index: int) -> None:
+        """Keep existing entities honest when /json explicitly disables a task."""
+        key = (unit, task_index)
+        task = self.tasks.get(key)
+        if task is None or not task.enabled:
+            return
+        disabled = TaskConfig(
+            src_unit=task.src_unit,
+            task_index=task.task_index,
+            device_number=task.device_number,
+            task_name=task.task_name,
+            value_names=task.value_names,
+            plugin_type=task.plugin_type,
+            enabled=False,
+            gpio_pin=task.gpio_pin,
+        )
+        self.tasks[key] = disabled
+        self.values.pop(key, None)
+        async_dispatcher_send(
+            self.hass, self._signal(SIGNAL_TASK_DISCOVERED), disabled
+        )
 
     @callback
     def _on_task(self, task: TaskConfig) -> None:

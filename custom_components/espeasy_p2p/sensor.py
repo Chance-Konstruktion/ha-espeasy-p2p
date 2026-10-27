@@ -225,7 +225,12 @@ class ESPEasyP2PValueSensor(SensorEntity):
         # leave its entities stuck "unavailable" even though the node is up and
         # discovered. `native_value` returns None until the first value lands,
         # so the entity shows "unknown" rather than "unavailable" in the gap.
-        return self._coordinator.is_unit_online(self._src_unit)
+        task = self._task()
+        return (
+            task is not None
+            and task.enabled
+            and self._coordinator.is_unit_online(self._src_unit)
+        )
 
 
 def _classify(

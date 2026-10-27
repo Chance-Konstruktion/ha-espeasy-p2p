@@ -297,6 +297,34 @@ async def test_namenloser_task_bekommt_slotnamen(
 # ── Verfuegbarkeit ────────────────────────────────────────────────────
 
 
+
+
+async def test_deaktivierter_task_wird_unavailable_statt_alten_wert_zu_zeigen(
+    integriert, hass: HomeAssistant, aioclient_mock
+) -> None:
+    _online(integriert)
+    integriert._on_task(_task(werte=["Temperature", "", "", ""]))
+    integriert._on_values(_werte(5, 0, [21.5]))
+    await hass.async_block_till_done()
+    entity_id = await _sensor_entity_id(hass, 5, 0, 0)
+    assert hass.states.get(entity_id).state == "21.5"
+
+    aioclient_mock.request(
+        "GET", f"http://{TEST_IP}:80/json",
+        json={"Sensors": [{
+            "TaskNumber": 1, "TaskName": "Klima", "TaskEnabled": False,
+            "TaskValues": [{"Name": "Temperature", "Value": 21.5}],
+        }]},
+    )
+    integriert._meta_inflight.add(TEST_IP)
+    await integriert._fetch_node_metadata_safe(integriert.nodes[5])
+    await hass.async_block_till_done()
+
+    assert integriert.tasks[(5, 0)].enabled is False
+    assert (5, 0) not in integriert.values
+    assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
+
+
 async def test_verschollener_knoten_wird_unavailable(
     integriert, hass: HomeAssistant
 ) -> None:

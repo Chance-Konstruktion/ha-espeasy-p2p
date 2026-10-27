@@ -12,6 +12,7 @@ and the release date is obvious at a glance.
 - Invalid `TaskNumber` values in a node's `/json` response are skipped individually instead of aborting metadata processing for every later task.
 - The `set_gpio_pin` service now validates pin range and non-empty task names server-side, even when called outside the UI.
 - Non-finite sensor readings (NaN and infinities) are ignored so invalid measurements do not poison sensor states or make a switch appear off.
+- Tasks explicitly marked disabled by `/json` now clear their stale values and make already-created sensor/switch entities unavailable until the task is enabled again.
 - Periodic and explicit `/json` refreshes run with a bounded concurrency of four requests, so slow nodes do not serially delay every other node.
 - A failed Home Assistant platform unload no longer stops and removes the coordinator still referenced by loaded entities.
 - Removed the unused `_State` dataclass from the protocol module.

@@ -184,6 +184,34 @@ async def test_0_5_und_darueber_gilt_an(integriert, hass: HomeAssistant) -> None
     assert hass.states.get(entity_id).state == STATE_ON
 
 
+
+
+async def test_deaktivierter_task_macht_schalter_unavailable(
+    integriert, hass: HomeAssistant, aioclient_mock
+) -> None:
+    _online(integriert)
+    integriert._on_task(_task(werte=["State", "", "", ""]))
+    integriert._on_values(_werte(5, 0, [1.0]))
+    await hass.async_block_till_done()
+    entity_id = await _schalter_entity_id(hass, 5, 0, 0)
+    assert hass.states.get(entity_id).state == STATE_ON
+
+    aioclient_mock.request(
+        "GET", f"http://{TEST_IP}:80/json",
+        json={"Sensors": [{
+            "TaskNumber": 1, "TaskName": "Keller", "TaskEnabled": False,
+            "TaskValues": [{"Name": "State", "Value": 1}],
+        }]},
+    )
+    integriert._meta_inflight.add(TEST_IP)
+    await integriert._fetch_node_metadata_safe(integriert.nodes[5])
+    await hass.async_block_till_done()
+
+    assert integriert.tasks[(5, 0)].enabled is False
+    assert (5, 0) not in integriert.values
+    assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
+
+
 async def test_offline_knoten_macht_schalter_unavailable(
     integriert, hass: HomeAssistant
 ) -> None:
