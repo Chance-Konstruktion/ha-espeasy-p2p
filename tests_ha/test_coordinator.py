@@ -108,6 +108,62 @@ async def test_wiederholtes_lebenszeichen_ist_kein_neuer_knoten(
     assert koordinator.nodes[5].name == "Keller neu"
 
 
+
+
+
+def test_benannter_task_meldet_neue_slots_und_umbenennungen(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    updates = signal_sammler(hass, koordinator, SIGNAL_TASK_DISCOVERED)
+    koordinator._on_task(task_config(name="Klima", werte=["Temperature", "", "", ""]))
+    koordinator._on_task(
+        task_config(name="Klima", werte=["Temperature", "Humidity", "", ""])
+    )
+    koordinator._on_task(
+        task_config(name="Raumklima", werte=["Temperature", "Humidity", "", ""])
+    )
+
+    assert [task.task_name for task in updates] == ["Klima", "Klima", "Raumklima"]
+    assert updates[1].value_names[1] == "Humidity"
+
+
+def test_c013_taskpakete_loeschen_keine_json_metadaten(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    json_task = TaskConfig(
+        src_unit=5, task_index=0, device_number=0,
+        task_name="Relais", value_names=["State", "", "", ""],
+        plugin_type="Output - GPIO", enabled=False, gpio_pin=26,
+    )
+    koordinator._on_task(json_task)
+    updates = signal_sammler(hass, koordinator, SIGNAL_TASK_DISCOVERED)
+
+    # Type-3 carries names and a plugin number, but not these HTTP fields.
+    c013_task = task_config(name="Relais", werte=["State", "", "", ""])
+    koordinator._on_task(c013_task)
+    merged = koordinator.tasks[(5, 0)]
+    assert merged.device_number == 33
+    assert merged.plugin_type == "Output - GPIO"
+    assert merged.enabled is False
+    assert merged.gpio_pin == 26
+
+    # Identical Type-3 packets are not UI updates.
+    koordinator._on_task(task_config(name="Relais", werte=["State", "", "", ""]))
+    assert updates == []
+
+    # A later HTTP snapshot can update its own fields without losing the ID.
+    koordinator._on_task(
+        TaskConfig(
+            src_unit=5, task_index=0, device_number=0,
+            task_name="Relais", value_names=["State", "", "", ""],
+            plugin_type="Output - GPIO", enabled=True, gpio_pin=13,
+        )
+    )
+    assert koordinator.tasks[(5, 0)].device_number == 33
+    assert koordinator.tasks[(5, 0)].enabled is True
+    assert koordinator.tasks[(5, 0)].gpio_pin == 13
+    assert len(updates) == 1
+
 def test_eigenes_echo_wird_ignoriert(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
 ) -> None:
@@ -380,6 +436,74 @@ async def test_json_lernt_namen_und_synchronisiert_werte(
     assert koordinator.values[(5, 0)] == [21.5, 0.0, 0.0, 0.0]
     assert len(wert_signale) == 1
     assert koordinator._meta_inflight == set(), "In-Flight-Marke immer raeumen"
+
+
+
+
+
+async def test_json_task_mit_ungueltiger_tasknummer_blockiert_nicht_die_restlichen(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
+) -> None:
+    aioclient_mock.request(
+        "GET",
+        f"http://{TEST_IP}:80/json",
+        json=_sensors_nutzlast(
+            [
+                None,
+                {"TaskNumber": "not-a-number", "TaskName": "Kaputt",
+                 "TaskValues": [{"Name": "V", "Value": 1}]},
+                {"TaskNumber": 1, "TaskName": "Valide",
+                 "TaskValues": [None, {"Name": "Temperature", "Value": 21.5}]},
+            ]
+        ),
+    )
+    koordinator.nodes[5] = knoten(5)
+
+    await koordinator._fetch_node_metadata_safe(koordinator.nodes[5])
+
+    assert (5, 0) in koordinator.tasks
+    assert koordinator.tasks[(5, 0)].task_name == "Valide"
+    assert koordinator.tasks[(5, 0)].value_names == ["", "Temperature", "", ""]
+    assert koordinator.values[(5, 0)] == [0.0, 21.5, 0.0, 0.0]
+
+
+async def test_veraltete_json_antwort_stellt_entfernten_knoten_nicht_wieder_her(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, monkeypatch
+) -> None:
+    node = knoten(5)
+
+    class DelayedResponse:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def json(self, content_type=None):
+            # Simulate deletion while the HTTP response is still in flight.
+            koordinator.forget_node_state(5)
+            return _sensors_nutzlast(
+                [{"TaskNumber": 1, "TaskName": "Alt",
+                  "TaskValues": [{"Name": "Temperature", "Value": 19.0}]}]
+            )
+
+    class FakeSession:
+        def get(self, _url, **_kwargs):
+            return DelayedResponse()
+
+    monkeypatch.setattr(
+        coordinator_modul, "async_get_clientsession", lambda _hass: FakeSession()
+    )
+    koordinator.nodes[5] = node
+
+    await koordinator._fetch_node_metadata_safe(node)
+
+    assert 5 not in koordinator.nodes
+    assert koordinator.tasks == {}
+    assert koordinator.values == {}
+    assert koordinator.last_seen == {}
 
 
 async def test_json_ohne_aenderung_feuert_kein_wertsignal(
@@ -662,46 +786,32 @@ async def test_remove_node_ohne_geraet_allein_moeglich(
     assert koordinator.nodes == {}
 
 
-async def test_remove_node_mit_geraet_endet_in_nameerror(
+async def test_remove_node_mit_geraet_entfernt_entitaeten_geraet_und_signal(
     hass: HomeAssistant, entry: MockConfigEntry, koordinator: ESPEasyP2PCoordinator
 ) -> None:
-    """GEFUNDENER FEHLER (nicht repariert, siehe BERICHT.md):
-
-    coordinator.py, async_remove_node() Zeile 713 ruft
-    ``registry.async_remove_device(device.id)`` -- aber in dieser Methode
-    gibt es keinen Namen ``registry`` (nur in _update_device_registry,
-    Zeile 363, existiert er als lokale Variable). Jeder echte Loeschlauf
-    eines Knotens MIT Geraeteeintrag endet in NameError -- und zwar nach
-    dem Aufraeumen: Der Speicherzustand ist schon vergessen, die
-    Entitaeten sind schon entfernt, der Geraeteeintrag bleibt als Leiche
-    zurueck, das Entfernen-Signal wird nie gefeuert und der Dienstaufruf
-    bricht mit einer Ausnahme.
-
-    Der Test haelt den Schaden fest. Die Reparatur (``dr.async_get(hass)``
-    vor dem Griff) ist absichtlich NICHT gemacht.
-    """
-    gerät = dr.async_get(hass).async_get_or_create(
+    """A node with a registry device must be fully removed without exceptions."""
+    geraet = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "unit-5")},
         name="Keller",
     )
     ent_reg = er.async_get(hass)
-    entitaet = ent_reg.async_get_or_create("switch", DOMAIN, "einmalig",
-                                           device_id=gerät.id)
+    entitaet = ent_reg.async_get_or_create(
+        "switch", DOMAIN, "einmalig", device_id=geraet.id
+    )
     koordinator.nodes[5] = knoten(5, ip="0.0.0.0")
     koordinator.tasks[(5, 0)] = task_config()
     koordinator.values[(5, 0)] = [1.0, 0, 0, 0]
     entfernt = signal_sammler(hass, koordinator, SIGNAL_NODE_REMOVED)
 
-    with pytest.raises(NameError, match="registry"):
-        await koordinator.async_remove_node(5)
+    assert await koordinator.async_remove_node(5) is True
 
-    # Der halbfertige Zustand, genau wie beschrieben:
-    assert 5 not in koordinator.nodes, "Speicherzustand ist schon weg"
-    assert ent_reg.async_get(entitaet.entity_id) is None, "Entitaet ist schon weg"
-    assert device_for_unit(hass, 5) is not None, "Geraet bleibt als Leiche"
-    assert entfernt == [], "Entfernen-Signal wird nie gefeuert"
-
+    assert 5 not in koordinator.nodes
+    assert (5, 0) not in koordinator.tasks
+    assert (5, 0) not in koordinator.values
+    assert ent_reg.async_get(entitaet.entity_id) is None
+    assert device_for_unit(hass, 5) is None
+    assert entfernt == [5]
 
 # ── Overrides ─────────────────────────────────────────────────────────
 
@@ -812,6 +922,28 @@ async def test_resync_burst_holt_mehrfach_und_ueberspringt_inflight(
     await koordinator._resync_burst(node, (0,))
     assert aioclient_mock.call_count == aufrufe
     koordinator._meta_inflight.discard(TEST_IP)
+
+
+
+
+
+async def test_knoten_entfernen_bricht_geplanten_resync_ab(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    koordinator.nodes[5] = knoten(5)
+    koordinator.async_schedule_resync(5, delays=(3600,))
+    await asyncio.sleep(0)
+
+    assert any(unit == 5 for unit in koordinator._background_tasks.values())
+
+    assert await koordinator.async_remove_node(5) is True
+    await hass.async_block_till_done()
+    # Let asyncio run task done-callbacks that remove completed jobs from
+    # the coordinator's ownership map.
+    await asyncio.sleep(0)
+
+    assert koordinator._background_tasks == {}
+    assert koordinator._meta_inflight == set()
 
 
 async def test_geplanter_resync_fuehrt_zu_json_abfrage(

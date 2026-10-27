@@ -24,12 +24,14 @@ leere Fall hier ganz vorn.
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 
 import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from spatial_hub_conformance import check
 
+from custom_components.espeasy_p2p.const import NODE_AGING_INTERVAL
 from custom_components.espeasy_p2p.protocol import NodeInfo
 from custom_components.espeasy_p2p.spatial import async_setup_spatial
 
@@ -222,6 +224,48 @@ async def test_ein_knotensignal_erreicht_den_hub(hass, eintrag, signal):
     async_dispatcher_send(
         hass, f"espeasy_p2p_{signal}_{eintrag.entry_id}", _einheit(1, "Keller")
     )
+    await hass.async_block_till_done()
+
+    assert gehoert == [EIGENE_DOMAIN]
+
+
+
+async def test_freshness_tick_notifies_hub_even_when_sensor_state_is_unchanged(
+    hass, eintrag, monkeypatch
+):
+    """Time-derived edge quality must refresh even without new entity states."""
+    import custom_components.espeasy_p2p.spatial as spatial_module
+
+    scheduled = {}
+
+    def fake_track_time_interval(_hass, action, interval):
+        scheduled["action"] = action
+        scheduled["interval"] = interval
+        return lambda: None
+
+    monkeypatch.setattr(
+        spatial_module, "async_track_time_interval", fake_track_time_interval
+    )
+    _registrierung(
+        hass,
+        eintrag,
+        KoordinatorDoppel(
+            nodes={1: _einheit(1, "Keller")},
+            last_seen={1: 0.0},
+        ),
+    )
+
+    from homeassistant.core import callback
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+    from custom_components.espeasy_p2p.spatial_hub_provider import SIGNAL_DATA_UPDATED
+
+    gehoert = []
+    async_dispatcher_connect(
+        hass, SIGNAL_DATA_UPDATED, callback(lambda pid: gehoert.append(pid))
+    )
+
+    assert scheduled["interval"] == timedelta(seconds=NODE_AGING_INTERVAL)
+    scheduled["action"](None)
     await hass.async_block_till_done()
 
     assert gehoert == [EIGENE_DOMAIN]

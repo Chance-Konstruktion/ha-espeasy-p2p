@@ -1,9 +1,8 @@
-"""Just enough Home Assistant for the floor-plan adapter to import.
+"""Minimal Home Assistant API stubs for the coreless floor-plan conformance kit.
 
-The conformance kit needs nothing but pytest. The adapter it checks does
-import Home Assistant, though -- for the device registry and the
-dispatcher -- so those two get stubs here rather than a 300 MB dependency
-in CI for two lookups.
+The fast test suite needs only pytest, not the full Home Assistant dependency.
+The adapter's registry, dispatcher and interval-timer APIs are stubbed here;
+real HA integration behavior belongs in tests_ha/.
 
 Everything stubbed below is stubbed because the adapter *uses* it. If a
 future change reaches for more of Home Assistant, the import will fail
@@ -54,6 +53,14 @@ if "homeassistant" not in sys.modules:
     dispatcher.async_dispatcher_connect = _connect
     dispatcher.async_dispatcher_send = _send
     dispatcher.listeners = _listeners
+
+    # The spatial adapter uses a periodic Home Assistant callback to refresh
+    # time-derived node quality. The coreless conformance tests only need the
+    # unsubscribe contract; the real timer is exercised in tests_ha/.
+    event = _module("homeassistant.helpers.event")
+    event.async_track_time_interval = (
+        lambda hass, action, interval: (lambda: None)
+    )
 
     device_registry = _module("homeassistant.helpers.device_registry")
 

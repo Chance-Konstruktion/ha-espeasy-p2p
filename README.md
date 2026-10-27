@@ -4,9 +4,9 @@
 
 # 📡 ESPEasy & RPiEasy P2P for Home Assistant
 
-**Push-based, local-first bridge between ESPEasy & RPiEasy nodes and Home Assistant — no MQTT, no cloud, no polling.**
+**Push-first, local-first bridge between ESPEasy & RPiEasy nodes and Home Assistant — no MQTT or cloud, with a 30-second `/json` reconciliation for values firmware does not push.**
 
-Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to **C013 (ESPEasy/RPiEasy P2P)** controller, and they show up in Home Assistant on their own. Every value is pushed the moment it changes. Every relay can be switched back from Lovelace.
+Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to the **C013 (ESPEasy/RPiEasy P2P)** controller, and they show up in Home Assistant on their own. Most live values arrive immediately over UDP; a 30-second `/json` refresh reconciles state changes the firmware does not publish (for example, timed relays). Every relay can be switched back from Lovelace.
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=flat-square)](https://hacs.xyz/)
 [![GitHub release](https://img.shields.io/github/v/release/Chance-Konstruktion/ha-espeasy-p2p?style=flat-square&color=18BCF2)](https://github.com/Chance-Konstruktion/ha-espeasy-p2p/releases)
@@ -36,8 +36,8 @@ No MQTT, no Mosquitto, no auth headers. Plain UDP on your LAN.
 </td>
 <td align="center" width="33%">
 
-### ⚡ Push, not poll
-Values arrive at HA the moment ESPEasy reads them. Sub-second freshness, no API hammering.
+### ⚡ Push first, reconcile safely
+Values arrive over C013 as soon as ESPEasy publishes them. A 30-second `/json` refresh catches state changes that are not pushed.
 
 </td>
 <td align="center" width="33%">
@@ -71,8 +71,8 @@ Temperature, humidity, pressure, lux, switches, analog, counters — anything ES
 <tr>
 <td>
 
-**🔁 Persistent state**
-Last values survive HA restarts. No "unknown" after a reboot.
+**🔁 State recovery**
+Switches restore their last known state; sensor values are re-read from the node when it reconnects. If a node cannot be reached yet, values may remain unknown or unavailable.
 
 </td>
 <td>
@@ -85,8 +85,8 @@ Toggle relays, GPIOs and PWM from Lovelace — outgoing C013 packets, just like 
 <tr>
 <td>
 
-**🧭 Unit-aware**
-HA picks the right device class and unit (°C, %, hPa, lx) from the ESPEasy plugin ID.
+**🧭 Unit-aware for common measurements**
+Explicit value names map temperature, humidity, pressure and illuminance to Home Assistant device classes and units. Other named values remain numeric sensors without inferred units.
 
 </td>
 <td>
@@ -100,7 +100,7 @@ Config flow, options, repair issues — fully translated DE + EN.
 <td>
 
 **🩺 Health watchdog**
-Per-node `last_seen` + an `available` sensor. Quiet nodes go `unavailable` automatically.
+Per-node `last_seen` tracking. Sensor and switch entities become `unavailable` when a node goes quiet and recover when it returns.
 
 </td>
 <td>

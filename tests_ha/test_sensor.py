@@ -65,6 +65,9 @@ async def test_benannte_werte_werden_sensoren(integriert, hass: HomeAssistant) -
 
 
 @pytest.mark.parametrize("werte", [["State", "", "", ""], ["Relay", "", "", ""]])
+
+
+
 async def test_schalterwerte_bleiben_keine_sensoren(
     integriert, hass: HomeAssistant, werte
 ) -> None:
@@ -77,6 +80,19 @@ async def test_schalterwerte_bleiben_keine_sensoren(
                 and e.domain == "sensor"]
     assert sensoren == []
 
+
+async def test_neuer_benannter_wertslot_wird_ohne_neustart_angelegt(
+    integriert, hass: HomeAssistant
+) -> None:
+    _online(integriert)
+    integriert._on_task(_task(werte=["Temperature", "", "", ""]))
+    await hass.async_block_till_done()
+    assert await _sensor_entity_id(hass, 5, 0, 0)
+
+    integriert._on_task(_task(werte=["Temperature", "Humidity", "", ""]))
+    await hass.async_block_till_done()
+
+    assert await _sensor_entity_id(hass, 5, 0, 1)
 
 async def test_platzhalter_bekommen_keine_entitaet_und_namen_schon(
     integriert, hass: HomeAssistant
@@ -176,6 +192,23 @@ async def test_wertindex_jenseits_der_empfangenen_werte(
 # ── Klassifizierung: Name bestimmt Klasse und Einheit ─────────────────
 
 
+
+
+
+@pytest.mark.parametrize("name", ["Lux", "Illuminance", "Bedroom lux"])
+async def test_beleuchtungsstaerke_bekommt_lux_einheit(
+    integriert, hass: HomeAssistant, name: str
+) -> None:
+    _online(integriert)
+    integriert._on_task(_task(werte=[name, "", "", ""]))
+    await hass.async_block_till_done()
+
+    entity_id = await _sensor_entity_id(hass, 5, 0, 0)
+    state = hass.states.get(entity_id)
+    assert state.attributes["device_class"] == "illuminance"
+    assert state.attributes["unit_of_measurement"] == "lx"
+
+
 async def test_temperatur_bekommt_grad_celsius(
     integriert, hass: HomeAssistant
 ) -> None:
@@ -198,6 +231,27 @@ async def test_luftfeuchte_bekommt_prozent(
     zustand = hass.states.get(entity_id)
     assert zustand.attributes["device_class"] == "humidity"
     assert zustand.attributes["unit_of_measurement"] == "%"
+
+
+async def test_dht_plugin_respects_temperature_and_humidity_value_names(
+    integriert, hass: HomeAssistant
+) -> None:
+    """The DHT plugin fallback must not relabel its humidity slot as °C."""
+    _online(integriert)
+    aufgabe = _task(werte=["Temperature", "Humidity", "", ""])
+    aufgabe.plugin_type = "Environment - DHT11"
+    integriert._on_task(aufgabe)
+    await hass.async_block_till_done()
+
+    temperature_id = await _sensor_entity_id(hass, 5, 0, 0)
+    humidity_id = await _sensor_entity_id(hass, 5, 0, 1)
+    temperature = hass.states.get(temperature_id)
+    humidity = hass.states.get(humidity_id)
+
+    assert temperature.attributes["device_class"] == "temperature"
+    assert temperature.attributes["unit_of_measurement"] == "°C"
+    assert humidity.attributes["device_class"] == "humidity"
+    assert humidity.attributes["unit_of_measurement"] == "%"
 
 
 async def test_druck_bekommt_hectopascal(

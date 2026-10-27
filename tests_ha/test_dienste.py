@@ -21,7 +21,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.espeasy_p2p import async_setup_entry
+from custom_components.espeasy_p2p import async_setup_entry, async_unload_entry
 from custom_components.espeasy_p2p.const import (
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -129,25 +129,25 @@ async def test_remove_node_dienst_ohne_geraet(
     assert integriert.tasks == {}
 
 
-async def test_remove_node_dienst_mit_geraet_bricht_mit_nameerror(
+async def test_remove_node_dienst_mit_geraet_entfernt_geraet(
     integriert, hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
-    """GEFUNDENER FEHLER (siehe BERICHT.md), bis zum Dienstaufruf durch:
-    async_remove_node laeuft in einen NameError, sobald der Knoten einen
-    Geraeteeintrag hat -- der normale Fall im Betrieb. Der Test belegt,
-    dass die Ausnahme aus dem Dienst nach oben durchschlägt."""
+    """The public service fully removes a known node and its device entry."""
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "unit-5")},
         name="Keller",
     )
     integriert.nodes[5] = knoten(5, ip="0.0.0.0")
+    integriert.tasks[(5, 0)] = type("T", (), {"src_unit": 5, "task_index": 0})()
 
-    with pytest.raises(NameError, match="registry"):
-        await hass.services.async_call(
-            DOMAIN, "remove_node", {"unit": 5}, blocking=True
-        )
+    await hass.services.async_call(
+        DOMAIN, "remove_node", {"unit": 5}, blocking=True
+    )
 
+    assert integriert.nodes == {}
+    assert integriert.tasks == {}
+    assert device_for_unit(hass, 5) is None
 
 async def test_remove_node_unbekannte_einheit(
     integriert, hass: HomeAssistant, caplog
@@ -228,6 +228,29 @@ async def test_entladen_klemmt_alles_ab(
         assert not hass.services.has_service(DOMAIN, dienst), dienst
     assert integriert._transport is None, "der UDP-Sockel ist zu"
 
+
+
+
+
+async def test_fehlgeschlagenes_platform_unload_belaesst_koordinator_und_dienste(
+    integriert, hass: HomeAssistant, entry: MockConfigEntry, monkeypatch
+) -> None:
+    """A failed platform unload must not orphan remaining entities."""
+    original = hass.config_entries.async_unload_platforms
+
+    async def fail_unload(_entry, _platforms):
+        return False
+
+    monkeypatch.setattr(hass.config_entries, "async_unload_platforms", fail_unload)
+    try:
+        result = await async_unload_entry(hass, entry)
+    finally:
+        monkeypatch.setattr(hass.config_entries, "async_unload_platforms", original)
+
+    assert result is False
+    assert hass.data[DOMAIN][entry.entry_id] is integriert
+    assert integriert._transport is not None
+    assert hass.services.has_service(DOMAIN, "scan")
 
 async def test_leerer_eintrag_bekommt_die_defaults_zurueckgeschrieben(
     hass: HomeAssistant, monkeypatch, socket_enabled, enable_custom_integrations

@@ -88,6 +88,9 @@ class ESPEasyP2PCoordinator:
         self._announce_task: asyncio.Task | None = None
         self._aging_task: asyncio.Task | None = None
         self._value_task: asyncio.Task | None = None
+        # One-off tasks created by node discovery and switch resync. Keep them
+        # owned by the coordinator so node removal and unload can cancel them.
+        self._background_tasks: dict[asyncio.Task, int] = {}
         # IPs we currently have an in-flight /json fetch for, so concurrent
         # Type-1 heartbeats don't kick off duplicate HTTP requests at once.
         # NOTE: this is deliberately NOT a "fetched once, never again" cache.
@@ -175,14 +178,35 @@ class ESPEasyP2PCoordinator:
         self._value_task = self.hass.loop.create_task(self._value_refresh_loop())
 
     async def async_stop(self) -> None:
+        pending: list[asyncio.Task] = []
         for task_attr in ("_announce_task", "_aging_task", "_value_task"):
             task = getattr(self, task_attr)
             if task is not None:
                 task.cancel()
+                pending.append(task)
                 setattr(self, task_attr, None)
+
+        for task in list(self._background_tasks):
+            if not task.done():
+                task.cancel()
+                pending.append(task)
+
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        self._background_tasks.clear()
+
         if self._transport is not None:
             self._transport.close()
             self._transport = None
+
+    def _create_background_task(self, coroutine, unit: int) -> asyncio.Task:
+        """Create a task owned by this coordinator and index it by unit."""
+        task = self.hass.async_create_task(coroutine)
+        self._background_tasks[task] = unit
+        task.add_done_callback(
+            lambda completed: self._background_tasks.pop(completed, None)
+        )
+        return task
 
     def _build_announce(self) -> bytes:
         return build_info_packet(
@@ -335,7 +359,9 @@ class ESPEasyP2PCoordinator:
             and not self._unit_has_named_tasks(node.unit)
         ):
             self._meta_inflight.add(node.ip)
-            self.hass.async_create_task(self._fetch_node_metadata_safe(node))
+            self._create_background_task(
+                self._fetch_node_metadata_safe(node), node.unit
+            )
 
     def _unit_has_named_tasks(self, unit: int) -> bool:
         """True once we've learned at least one real (named) task for a unit."""
@@ -401,21 +427,47 @@ class ESPEasyP2PCoordinator:
             )
             return
 
+        # A request can outlive its node (e.g. when the user removes it while
+        # /json is in flight). Never let a stale response recreate its tasks,
+        # values, or last_seen entry after the node was removed or its IP changed.
+        current_node = self.nodes.get(node.unit)
+        if current_node is None or current_node.ip != node.ip:
+            _LOGGER.debug(
+                "Discarding stale /json response for removed/replaced unit %d (%s)",
+                node.unit, node.ip,
+            )
+            return
+
         # Reaching the node over HTTP is itself proof it is alive. Record it
         # so entities go available even if the node's UDP heartbeat is delayed
         # after a restart (notably RPiEasy, which may not re-broadcast at once).
         self._touch(node.unit)
 
-        sensors = data.get("Sensors") or []
+        if not isinstance(data, dict):
+            _LOGGER.debug("Ignoring non-object /json response from unit %d", node.unit)
+            return
+        sensors = data.get("Sensors")
+        if not isinstance(sensors, list):
+            _LOGGER.debug("Ignoring /json response without a Sensors list from unit %d", node.unit)
+            return
+
         learned = 0
         for sensor in sensors:
+            if not isinstance(sensor, dict):
+                _LOGGER.debug("Skipping malformed sensor entry in /json from unit %d", node.unit)
+                continue
             # ESPEasy uses 1-based TaskNumber on the JSON API, but 0-based
             # task indices on the C013 wire. Convert here so they match
             # what we already keyed in self.tasks/self.values.
             task_number = sensor.get("TaskNumber")
-            if task_number is None:
+            try:
+                task_index = int(task_number) - 1
+            except (TypeError, ValueError):
+                _LOGGER.debug(
+                    "Skipping /json task with invalid TaskNumber %r from unit %d",
+                    task_number, node.unit,
+                )
                 continue
-            task_index = int(task_number) - 1
             if task_index < 0:
                 continue
             enabled_raw = sensor.get("TaskEnabled")
@@ -443,11 +495,15 @@ class ESPEasyP2PCoordinator:
                     gpio_pin = pin_int
                     break
             task_name = str(sensor.get("TaskName") or "").strip()
-            task_values = sensor.get("TaskValues") or []
+            raw_task_values = sensor.get("TaskValues")
+            task_values = raw_task_values if isinstance(raw_task_values, list) else []
             value_names: list[str] = []
             for tv in task_values:
                 # ESPEasy: "Name". RPiEasy: also "Name".
-                value_names.append(str(tv.get("Name") or "").strip())
+                # Keep slot alignment if one malformed value entry appears.
+                value_names.append(
+                    str(tv.get("Name") or "").strip() if isinstance(tv, dict) else ""
+                )
             value_names = (value_names + ["", "", "", ""])[:4]
             if not task_name and not any(value_names):
                 continue
@@ -476,6 +532,9 @@ class ESPEasyP2PCoordinator:
             parsed: list[float] = []
             saw_number = False
             for tv in task_values:
+                if not isinstance(tv, dict):
+                    parsed.append(0.0)
+                    continue
                 try:
                     parsed.append(float(tv.get("Value")))
                     saw_number = True
@@ -506,23 +565,62 @@ class ESPEasyP2PCoordinator:
     def _on_task(self, task: TaskConfig) -> None:
         key = (task.src_unit, task.task_index)
         prev = self.tasks.get(key)
+
+        if prev is not None:
+            if task.device_number != 0:
+                # C013 Type-3 packets carry task/value names and the plugin
+                # number, but not the HTTP-only metadata. Do not erase fields
+                # learned from /json just because a heartbeat arrives.
+                task = TaskConfig(
+                    src_unit=task.src_unit,
+                    task_index=task.task_index,
+                    device_number=task.device_number,
+                    task_name=task.task_name,
+                    value_names=task.value_names,
+                    plugin_type=task.plugin_type or prev.plugin_type,
+                    enabled=prev.enabled,
+                    gpio_pin=(
+                        task.gpio_pin if task.gpio_pin is not None else prev.gpio_pin
+                    ),
+                )
+            else:
+                # /json provides plugin type, enabled state and GPIO, but not
+                # the numeric C013 plugin ID. Keep that wire metadata stable.
+                task = TaskConfig(
+                    src_unit=task.src_unit,
+                    task_index=task.task_index,
+                    device_number=prev.device_number or task.device_number,
+                    task_name=task.task_name,
+                    value_names=task.value_names,
+                    plugin_type=task.plugin_type or prev.plugin_type,
+                    enabled=task.enabled,
+                    gpio_pin=task.gpio_pin,
+                )
+
         self.tasks[key] = task
-        # Fire the discovery signal whenever this task gains real value
-        # names that weren't there before. That covers both the initial
-        # discovery and the case where a placeholder TaskConfig (created
-        # from incoming sensor data with no metadata yet) gets replaced
-        # by the real config from /json or a Type-3 broadcast.
         prev_named = bool(prev and any(v for v in prev.value_names))
         now_named = any(v for v in task.value_names)
-        if now_named and not prev_named:
+        # Task updates are also entity updates: a named slot can appear later,
+        # and a device/task can be renamed after its first discovery. Compare
+        # only user-visible metadata so repeated identical Type-3 packets
+        # don't trigger needless state writes.
+        changed = prev is None or any((
+            prev.task_name != task.task_name,
+            prev.value_names != task.value_names,
+            prev.plugin_type != task.plugin_type,
+            prev.enabled != task.enabled,
+            prev.gpio_pin != task.gpio_pin,
+        ))
+        if changed and (now_named or prev_named):
             _LOGGER.info(
-                "Discovered task %d on unit %d: %s (values=%s)",
-                task.task_index,
+                "Task metadata updated on unit %d: %s (values=%s)",
                 task.src_unit,
                 task.task_name,
                 task.value_names,
             )
-            async_dispatcher_send(self.hass, self._signal(SIGNAL_TASK_DISCOVERED), task)
+            async_dispatcher_send(
+                self.hass, self._signal(SIGNAL_TASK_DISCOVERED), task
+            )
 
     def _resolve_src_unit(self, payload: TaskValues) -> int:
         """Some firmware sends sensor data with src_unit=255 (broadcast).
@@ -606,7 +704,7 @@ class ESPEasyP2PCoordinator:
         node = self.nodes.get(unit)
         if node is None or not node.ip or node.ip == "0.0.0.0":
             return
-        self.hass.async_create_task(self._resync_burst(node, delays))
+        self._create_background_task(self._resync_burst(node, delays), unit)
 
     async def _resync_burst(self, node: NodeInfo, delays: tuple[int, ...]) -> None:
         for delay in delays:
@@ -686,6 +784,18 @@ class ESPEasyP2PCoordinator:
             self.values.pop(key, None)
         self.last_seen.pop(unit, None)
         self._offline.discard(unit)
+
+        # Do not allow a delayed metadata fetch or resync burst to resurrect
+        # state for a node the user explicitly removed.
+        try:
+            current = asyncio.current_task()
+        except RuntimeError:
+            # forget_node_state is also a synchronous helper used by UI/tests.
+            current = None
+        for task, task_unit in list(self._background_tasks.items()):
+            if task_unit == unit and task is not current:
+                task.cancel()
+
         if node is not None and node.ip:
             self._meta_inflight.discard(node.ip)
 
@@ -710,7 +820,7 @@ class ESPEasyP2PCoordinator:
                 ent_reg, device.id, include_disabled_entities=True
             ):
                 ent_reg.async_remove(ent.entity_id)
-            registry.async_remove_device(device.id)
+            dr.async_get(self.hass).async_remove_device(device.id)
         async_dispatcher_send(self.hass, self._signal(SIGNAL_NODE_REMOVED), unit)
         _LOGGER.info("Removed node unit=%d", unit)
         return True

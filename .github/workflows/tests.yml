@@ -14,10 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # No Home Assistant: the floor-plan conformance kit is built to run
-      # without it, and tests/conftest.py stubs the two helpers the adapter
-      # actually touches. Anything more would be a 300 MB dependency for
-      # two lookups.
+      # Keep this workflow coreless and fast. tests/conftest.py stubs the
+      # small HA API surface used by the floor-plan conformance tests.
+      # The separate tests_ha/ suite requires a real Home Assistant test env.
       - name: Install test dependencies
         run: pip install pytest pytest-asyncio
       - name: Run unit tests

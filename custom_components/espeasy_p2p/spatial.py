@@ -16,9 +16,11 @@ installed, `spatial_provider` writes a dict nobody reads.
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_time_interval
 
 # Deliberately no import of the coordinator: this module reads five
 # attributes off it and nothing else, so typing it as Any keeps the
@@ -26,6 +28,7 @@ from homeassistant.core import HomeAssistant
 # run without Home Assistant installed.
 from .const import (
     DOMAIN,
+    NODE_AGING_INTERVAL,
     NODE_OFFLINE_TIMEOUT,
     SIGNAL_NODE_AVAILABILITY,
     SIGNAL_NODE_DISCOVERED,
@@ -161,7 +164,7 @@ def async_setup_spatial(
         coordinator.async_schedule_resync(int(item_id.removeprefix("unit-")))
         return {"success": True}
 
-    spatial_provider(
+    provider = spatial_provider(
         hass,
         entry,
         name="ESPEasy P2P",
@@ -176,3 +179,20 @@ def async_setup_spatial(
             f"{SIGNAL_NODE_AVAILABILITY}_{entry.entry_id}",
         ],
     )
+
+    # The model contains time-derived data (silent_for / edge quality), not
+    # just entity states. A node can keep sending identical values, which
+    # causes no HA state_changed event; without a periodic hint its edge can
+    # remain "good" until the online/offline transition at 120 seconds.
+    @callback
+    def _notify_freshness_tick(_now: datetime) -> None:
+        provider.async_notify()
+
+    if entry is not None and hasattr(entry, "async_on_unload"):
+        entry.async_on_unload(
+            async_track_time_interval(
+                hass,
+                _notify_freshness_tick,
+                timedelta(seconds=NODE_AGING_INTERVAL),
+            )
+        )

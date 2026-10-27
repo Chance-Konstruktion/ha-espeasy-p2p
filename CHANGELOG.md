@@ -5,6 +5,25 @@ All notable changes to this integration are documented here. Dates use
 version numbers** (`YYMMDD`) instead of semver — they sort chronologically
 and the release date is obvious at a glance.
 
+## Unreleased
+
+### Fixed
+- Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.
+- Invalid `TaskNumber` values in a node's `/json` response are skipped individually instead of aborting metadata processing for every later task.
+- A failed Home Assistant platform unload no longer stops and removes the coordinator still referenced by loaded entities.
+- Removed the unused `_State` dataclass from the protocol module.
+- Task metadata updates now refresh existing entities and create newly named value slots without a restart; C013 Type-3 packets no longer erase plugin/GPIO metadata learned from `/json`.
+- `remove_node` now removes the device-registry entry and emits the removal signal instead of raising a `NameError` after deleting the entities.
+- Sensor value names now take precedence over plugin fallbacks, so a DHT task's `Humidity` slot is classified as humidity (`%`) instead of temperature (`°C`).
+- Illuminance values named `Lux` or `Illuminance` now expose Home Assistant's illuminance device class and `lx` unit.
+
+### Documentation
+- Clarified that C013 is the primary push path, while a 30-second `/json` refresh reconciles values the firmware does not publish.
+- Corrected the health-watchdog description: availability is exposed on discovered sensor/switch entities; there is no separate `available` sensor entity.
+- Clarified state recovery: switches restore the last known state, while sensor values are read from the node again when available.
+- Narrowed the unit-aware claim to the temperature, humidity and pressure classifications implemented by the sensor platform.
+- Spatial Hub now receives a 30-second freshness notification, so signal quality can age even when a node's reported sensor values stay unchanged.
+
 ## 260617
 
 ### Added
