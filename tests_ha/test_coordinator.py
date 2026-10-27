@@ -662,46 +662,32 @@ async def test_remove_node_ohne_geraet_allein_moeglich(
     assert koordinator.nodes == {}
 
 
-async def test_remove_node_mit_geraet_endet_in_nameerror(
+async def test_remove_node_mit_geraet_entfernt_geraet_und_signal(
     hass: HomeAssistant, entry: MockConfigEntry, koordinator: ESPEasyP2PCoordinator
 ) -> None:
-    """GEFUNDENER FEHLER (nicht repariert, siehe BERICHT.md):
-
-    coordinator.py, async_remove_node() Zeile 713 ruft
-    ``registry.async_remove_device(device.id)`` -- aber in dieser Methode
-    gibt es keinen Namen ``registry`` (nur in _update_device_registry,
-    Zeile 363, existiert er als lokale Variable). Jeder echte Loeschlauf
-    eines Knotens MIT Geraeteeintrag endet in NameError -- und zwar nach
-    dem Aufraeumen: Der Speicherzustand ist schon vergessen, die
-    Entitaeten sind schon entfernt, der Geraeteeintrag bleibt als Leiche
-    zurueck, das Entfernen-Signal wird nie gefeuert und der Dienstaufruf
-    bricht mit einer Ausnahme.
-
-    Der Test haelt den Schaden fest. Die Reparatur (``dr.async_get(hass)``
-    vor dem Griff) ist absichtlich NICHT gemacht.
-    """
-    gerät = dr.async_get(hass).async_get_or_create(
+    """Ein kompletter Loeschlauf entfernt Entitaeten und Geraet und feuert das Signal."""
+    geraet = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, "unit-5")},
         name="Keller",
     )
     ent_reg = er.async_get(hass)
-    entitaet = ent_reg.async_get_or_create("switch", DOMAIN, "einmalig",
-                                           device_id=gerät.id)
+    entitaet = ent_reg.async_get_or_create(
+        "switch", DOMAIN, "einmalig", device_id=geraet.id
+    )
     koordinator.nodes[5] = knoten(5, ip="0.0.0.0")
     koordinator.tasks[(5, 0)] = task_config()
     koordinator.values[(5, 0)] = [1.0, 0, 0, 0]
     entfernt = signal_sammler(hass, koordinator, SIGNAL_NODE_REMOVED)
 
-    with pytest.raises(NameError, match="registry"):
-        await koordinator.async_remove_node(5)
+    assert await koordinator.async_remove_node(5) is True
 
-    # Der halbfertige Zustand, genau wie beschrieben:
-    assert 5 not in koordinator.nodes, "Speicherzustand ist schon weg"
-    assert ent_reg.async_get(entitaet.entity_id) is None, "Entitaet ist schon weg"
-    assert device_for_unit(hass, 5) is not None, "Geraet bleibt als Leiche"
-    assert entfernt == [], "Entfernen-Signal wird nie gefeuert"
-
+    assert 5 not in koordinator.nodes
+    assert all(unit != 5 for unit, _ in koordinator.tasks)
+    assert (5, 0) not in koordinator.values
+    assert ent_reg.async_get(entitaet.entity_id) is None
+    assert device_for_unit(hass, 5) is None
+    assert entfernt == [5]
 
 # ── Overrides ─────────────────────────────────────────────────────────
 
