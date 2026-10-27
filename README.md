@@ -260,7 +260,7 @@ order does not matter.
 | Entity | Type | Source |
 | :--- | :--- | :--- |
 | `sensor.<name>_<task>_<value>` | `sensor` | each value slot of each task |
-| `switch.<name>_<task>` | `switch` | writable GPIO tasks |
+| `switch.<name>_<task>` | `switch` | task values named `State`, `Output`, `Relay`, or `Switch` |
 
 </details>
 
