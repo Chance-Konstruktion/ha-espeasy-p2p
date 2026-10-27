@@ -46,6 +46,10 @@ from .registry import device_for_unit
 
 _LOGGER = logging.getLogger(__name__)
 
+# Keep a single slow/unreachable device from stretching a whole refresh cycle
+# into N * HTTP_TIMEOUT seconds, while avoiding a burst against every node.
+_METADATA_REQUEST_CONCURRENCY = 4
+
 
 class ESPEasyP2PCoordinator:
     """Owns the UDP socket and the in-memory state of nodes/tasks/values."""
@@ -101,6 +105,9 @@ class ESPEasyP2PCoordinator:
         # node has actually yielded at least one named task (see _on_node /
         # _unit_has_named_tasks). Once learned, the gate stops the re-polling.
         self._meta_inflight: set[str] = set()
+        self._metadata_semaphore = asyncio.Semaphore(
+            _METADATA_REQUEST_CONCURRENCY
+        )
 
     def get_gpio_pin(self, unit: int, task_name: str) -> int | None:
         """Return the configured/learned GPIO pin for a task, or None."""
@@ -260,13 +267,19 @@ class ESPEasyP2PCoordinator:
         try:
             while True:
                 await asyncio.sleep(VALUE_REFRESH_INTERVAL)
+                # Schedule all eligible nodes immediately; the shared
+                # semaphore below bounds actual concurrent HTTP requests.
+                # This prevents a handful of timeouts from delaying refresh
+                # for every healthy node in a larger mesh.
                 for node in list(self.nodes.values()):
                     if not node.ip or node.ip == "0.0.0.0":
                         continue
                     if node.ip in self._meta_inflight:
                         continue
                     self._meta_inflight.add(node.ip)
-                    await self._fetch_node_metadata_safe(node)
+                    self._create_background_task(
+                        self._fetch_node_metadata_safe(node), node.unit
+                    )
         except asyncio.CancelledError:
             pass
 
@@ -411,16 +424,17 @@ class ESPEasyP2PCoordinator:
         url = f"http://{node.ip}:{node.web_port}/json"
         session = async_get_clientsession(self.hass)
         try:
-            async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=5)
-            ) as resp:
-                if resp.status != 200:
-                    _LOGGER.debug(
-                        "GET %s returned HTTP %d (will retry on next heartbeat)",
-                        url, resp.status,
-                    )
-                    return
-                data = await resp.json(content_type=None)
+            async with self._metadata_semaphore:
+                async with session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status != 200:
+                        _LOGGER.debug(
+                            "GET %s returned HTTP %d (will retry on next heartbeat)",
+                            url, resp.status,
+                        )
+                        return
+                    data = await resp.json(content_type=None)
         except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
             _LOGGER.debug(
                 "Failed to fetch %s: %s (will retry on next heartbeat)", url, err
@@ -715,11 +729,21 @@ class ESPEasyP2PCoordinator:
             await self._fetch_node_metadata_safe(node)
 
     async def async_refetch_metadata(self) -> None:
-        """Force a /json re-fetch for every known node."""
+        """Force a bounded-concurrency /json re-fetch for every known node."""
+        pending: list[asyncio.Task] = []
         for node in list(self.nodes.values()):
-            if node.ip and node.ip != "0.0.0.0":
-                self._meta_inflight.add(node.ip)
-                await self._fetch_node_metadata_safe(node)
+            if not node.ip or node.ip == "0.0.0.0":
+                continue
+            if node.ip in self._meta_inflight:
+                continue
+            self._meta_inflight.add(node.ip)
+            pending.append(
+                self._create_background_task(
+                    self._fetch_node_metadata_safe(node), node.unit
+                )
+            )
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def async_send_raw_command(self, unit: int, command: str) -> dict[str, Any]:
         """Send an arbitrary ESPEasy command to a unit via P2P + HTTP.

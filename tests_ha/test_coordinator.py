@@ -397,6 +397,48 @@ def _sensors_nutzlast(sensors: list[dict]) -> dict:
     return {"Sensors": sensors}
 
 
+
+
+async def test_refetch_metadata_begrenzt_parallelitaet_und_verkuerzt_wartezeit(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, monkeypatch
+) -> None:
+    active = 0
+    max_active = 0
+
+    class FakeResponse:
+        status = 200
+
+        async def __aenter__(self):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.005)
+            return self
+
+        async def __aexit__(self, *_args):
+            nonlocal active
+            active -= 1
+
+        async def json(self, content_type=None):
+            await asyncio.sleep(0.005)
+            return {"Sensors": []}
+
+    class FakeSession:
+        def get(self, _url, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        coordinator_modul, "async_get_clientsession", lambda _hass: FakeSession()
+    )
+    for unit in range(5, 14):
+        koordinator.nodes[unit] = knoten(unit, ip=f"192.0.2.{unit}")
+
+    await koordinator.async_refetch_metadata()
+
+    assert max_active == 4, "requests are concurrent but bounded"
+    assert active == 0
+    assert koordinator._meta_inflight == set()
+
 async def test_json_lernt_namen_und_synchronisiert_werte(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
 ) -> None:
