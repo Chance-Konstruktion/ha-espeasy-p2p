@@ -19,7 +19,7 @@ from homeassistant.helpers import entity_registry as er
 from custom_components.espeasy_p2p.const import NODE_OFFLINE_TIMEOUT
 from custom_components.espeasy_p2p.protocol import TaskConfig, TaskValues
 
-from conftest import knoten
+from conftest import TEST_IP, knoten
 
 
 def _task(unit: int = 5, name: str = "Klima", idx: int = 0,
