@@ -243,10 +243,14 @@ def _classify(
     if 0 <= value_index < len(task.value_names):
         value_name = task.value_names[value_index].strip().lower()
     plugin = task.plugin_type.lower()
-    if "temperature" in value_name or "ds18b20" in plugin or "dht" in plugin:
+    # A task such as DHT22 can expose both temperature and humidity.
+    # Its plugin type is only a fallback: the value name must take precedence.
+    if "temperature" in value_name:
         return (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
     if "humidity" in value_name:
         return (SensorDeviceClass.HUMIDITY, PERCENTAGE)
     if "pressure" in value_name:
         return (SensorDeviceClass.PRESSURE, UnitOfPressure.HPA)
+    if "ds18b20" in plugin or "dht" in plugin:
+        return (SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS)
     return (None, None)
