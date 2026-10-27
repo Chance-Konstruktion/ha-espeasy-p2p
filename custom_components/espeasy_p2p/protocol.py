@@ -10,7 +10,7 @@ import asyncio
 import logging
 import socket
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from .const import (
@@ -69,12 +69,6 @@ class TaskValues:
     task_index: int
     values: list[float]
     src_ip: str = ""
-
-
-@dataclass
-class _State:
-    nodes: dict[int, NodeInfo] = field(default_factory=dict)
-    tasks: dict[tuple[int, int], TaskConfig] = field(default_factory=dict)
 
 
 class ESPEasyP2PProtocol(asyncio.DatagramProtocol):
