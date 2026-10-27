@@ -4,7 +4,7 @@
 
 # 📡 ESPEasy & RPiEasy P2P for Home Assistant
 
-**Push-based, local-first bridge between ESPEasy & RPiEasy nodes and Home Assistant — no MQTT, no cloud, no polling.**
+**Push-first, local bridge between ESPEasy & RPiEasy nodes and Home Assistant — no MQTT or cloud, with a 30-second HTTP resync safety net.**
 
 Drop your ESP8266/ESP32 or Raspberry Pi sensors on the LAN, set them to **C013 (ESPEasy/RPiEasy P2P)** controller, and they show up in Home Assistant on their own. Every value is pushed the moment it changes. Every relay can be switched back from Lovelace.
 
@@ -36,8 +36,8 @@ No MQTT, no Mosquitto, no auth headers. Plain UDP on your LAN.
 </td>
 <td align="center" width="33%">
 
-### ⚡ Push, not poll
-Values arrive at HA the moment ESPEasy reads them. Sub-second freshness, no API hammering.
+### ⚡ Push-first, with a safety net
+Values normally arrive via C013 broadcasts. A 30-second `/json` refresh also catches state changes (such as a timed relay switching off) that the node does not broadcast.
 
 </td>
 <td align="center" width="33%">
@@ -72,7 +72,7 @@ Temperature, humidity, pressure, lux, switches, analog, counters — anything ES
 <td>
 
 **🔁 Persistent state**
-Last values survive HA restarts. No "unknown" after a reboot.
+Switch state is restored across Home Assistant restarts. Numeric sensor values resume when a new C013 packet or `/json` refresh arrives.
 
 </td>
 <td>
@@ -100,7 +100,7 @@ Config flow, options, repair issues — fully translated DE + EN.
 <td>
 
 **🩺 Health watchdog**
-Per-node `last_seen` + an `available` sensor. Quiet nodes go `unavailable` automatically.
+The integration tracks per-node `last_seen` internally and marks its sensor/switch entities `unavailable` after 120 seconds without traffic. It does not currently create separate `last_seen` or `available` entities.
 
 </td>
 <td>
@@ -194,12 +194,11 @@ Two-way control is supported for tasks that map to writable GPIOs.
 <details>
 <summary><b>Supported output kinds</b></summary>
 
-| ESPEasy plugin | HA platform | Notes |
+| Task value name | HA entity | Notes |
 | :--- | :--- | :--- |
-| GPIO Switch (P001) | `switch` | On/off, retained |
-| Relay / Bistable | `switch` | Mirrored locally on the node |
-| PWM Output (P019) | `light` (brightness) | 0–1023 mapped to 0–255 |
-| GPIO Pulse | `button` | Fires a one-shot C013 frame |
+| `State`, `Output`, `Relay`, or `Switch` | `switch` | Exposed when a task value has one of these names; control uses the node's HTTP endpoint and a best-effort C013 command |
+| Other named values | `sensor` | Numeric values; common names such as Temperature, Humidity, and Pressure receive matching device classes |
+| PWM / pulse tasks | No dedicated `light` or `button` entity | Send commands through `espeasy_p2p.send_command` when the node supports the command |
 
 </details>
 
@@ -208,7 +207,7 @@ Two-way control is supported for tasks that map to writable GPIOs.
 
 When you flip a switch in Lovelace, `espeasy_p2p` sends a **unicast** C013 frame to the node's last-seen IP with the target task index and the new value. The node executes the command locally — no acknowledgement is required because the next sensor broadcast confirms the new state.
 
-If the node is offline, the packet is silently dropped. HA marks the entity `unavailable` after the per-node `last_seen` timeout (default **5 min**).
+If the node is offline, the packet is silently dropped. HA marks the entity `unavailable` after the per-node timeout (120 seconds without C013 traffic or a successful `/json` refresh).
 
 </details>
 
@@ -261,10 +260,7 @@ order does not matter.
 | Entity | Type | Source |
 | :--- | :--- | :--- |
 | `sensor.<name>_<task>_<value>` | `sensor` | each value slot of each task |
-| `binary_sensor.<name>_<task>` | `binary_sensor` | switch/PIR tasks |
 | `switch.<name>_<task>` | `switch` | writable GPIO tasks |
-| `sensor.<name>_last_seen` | `sensor` (timestamp) | per-node watchdog |
-| `binary_sensor.<name>_available` | `binary_sensor` | derived from `last_seen` |
 
 </details>
 
@@ -273,9 +269,11 @@ order does not matter.
 
 | Service | Fields | What it does |
 | :--- | :--- | :--- |
-| `espeasy_p2p.send_command` | `unit`, `task`, `value` | Send a raw C013 command frame |
-| `espeasy_p2p.reload_unit` | `unit` | Drop cached entities + rediscover |
-| `espeasy_p2p.rename_unit` | `unit`, `new_name` | Persist a friendly name |
+| `espeasy_p2p.scan` | none | Broadcast a discovery request |
+| `espeasy_p2p.refetch_metadata` | none | Refresh task metadata and values from each known node's `/json` endpoint |
+| `espeasy_p2p.send_command` | `unit`, `command` | Send a command via C013 and HTTP `/control` |
+| `espeasy_p2p.set_gpio_pin` | `unit`, `task_name`, `pin` | Persist the GPIO pin used to control a task |
+| `espeasy_p2p.remove_node` | `unit` | Forget a node and remove its device and entities |
 
 </details>
 
@@ -290,8 +288,9 @@ order does not matter.
 | Decimal precision | `3` | Decimal places shown for sensor values (0–6) |
 
 Per-switch GPIO pins and command templates are configured later via the
-integration's **Configure** (options) dialog. The stale/offline timeout
-(120 s) is fixed.
+integration's **Configure** (options) dialog. The stale/offline timeout is
+120 seconds. Availability is reflected on the sensor/switch entities; no
+standalone last-seen or availability entity is currently created.
 
 > **Networking:** the integration receives UDP **broadcasts** on port 8266.
 > This only works when Home Assistant can see them on the LAN — i.e. HA OS,
