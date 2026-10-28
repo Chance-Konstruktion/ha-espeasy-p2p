@@ -74,6 +74,18 @@ async def _schalter_entity_id(hass: HomeAssistant, unit: int, task: int,
     return eintraege[0].entity_id
 
 
+async def test_switch_entity_id_change_hook_is_safe(integriert) -> None:
+    """Renaming the entity must not require its subscriptions to be rebuilt."""
+    entity = ESPEasyP2PSwitch(
+        coordinator=integriert,
+        entry_id="test-entry",
+        src_unit=5,
+        task_index=0,
+        value_index=0,
+    )
+    entity.async_entity_id_changed("switch.old_name")
+
+
 def _befehle(aioclient_mock) -> list[str]:
     """Die tatsaechlich gesendeten /control-Kommandos, in Reihenfolge."""
     return [

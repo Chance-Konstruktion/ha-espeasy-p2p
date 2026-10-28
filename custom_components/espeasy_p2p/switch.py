@@ -145,6 +145,18 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
         )
 
     @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Opt in to in-place entity-ID changes introduced in HA 2026.11.
+
+        Dispatcher subscriptions are keyed by config entry, not entity ID, so
+        they remain valid after a rename. Delegate when the base API exists;
+        older Home Assistant releases do not provide this hook.
+        """
+        parent_hook = getattr(super(), "async_entity_id_changed", None)
+        if parent_hook is not None:
+            parent_hook(old_entity_id)
+
+    @callback
     def _handle_availability(self, unit: int) -> None:
         if unit == self._src_unit:
             self.async_write_ha_state()
