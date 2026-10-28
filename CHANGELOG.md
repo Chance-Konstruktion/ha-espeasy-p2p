@@ -9,6 +9,7 @@ and the release date is obvious at a glance.
 
 ### Home Assistant 2026.11 compatibility
 - Add regression checks for config-flow step IDs, deprecated DeviceInfo parent links, and manifest metadata. The integration already prefers the per-config-entry device registry lookup and uses current DeviceInfo construction.
+- Declare the `hubs_protocols` category for HACS catalog discovery.
 
 ### Fixed
 - Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.
