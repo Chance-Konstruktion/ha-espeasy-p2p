@@ -18,6 +18,7 @@ from homeassistant.helpers import entity_registry as er
 
 from custom_components.espeasy_p2p.const import NODE_OFFLINE_TIMEOUT
 from custom_components.espeasy_p2p.protocol import TaskConfig, TaskValues
+from custom_components.espeasy_p2p.sensor import ESPEasyP2PValueSensor
 
 from conftest import TEST_IP, knoten
 
@@ -50,6 +51,18 @@ async def _sensor_entity_id(hass: HomeAssistant, unit: int, task: int,
     ]
     assert eintraege, f"Kein Sensor fuer unit={unit} task={task} wert={wert} angelegt"
     return eintraege[0].entity_id
+
+
+async def test_sensor_entity_id_change_hook_is_safe(integriert) -> None:
+    """The 2026.11 lifecycle hook also works on older HA base classes."""
+    entity = ESPEasyP2PValueSensor(
+        coordinator=integriert,
+        entry_id="test-entry",
+        src_unit=5,
+        task_index=0,
+        value_index=0,
+    )
+    entity.async_entity_id_changed("sensor.old_name")
 
 
 # ── Wer wird Sensor, wer nicht? ───────────────────────────────────────
