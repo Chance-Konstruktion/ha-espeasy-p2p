@@ -207,7 +207,7 @@ Two-way control is supported for tasks that map to writable GPIOs.
 
 When you flip a switch in Lovelace, `espeasy_p2p` sends best-effort C013 Type-0 command packets to the node's last-seen IP, then tries the same candidate command or commands through the node's HTTP `/control` endpoint. C013 delivery is not acknowledged, and stock ESPEasy may ignore Type-0 commands. If configured, a custom command template is used on its own; otherwise the integration tries a configured GPIO command, then RPiEasy's `taskvaluesetandrun` form when the task/value names are available, and finally a task-name command. It accepts the first HTTP 200 response whose body looks successful and updates the local switch state only then. On failure, the displayed state is left unchanged. Later C013 pushes and the periodic `/json` refresh resynchronise the state with the node.
 
-Entities become `unavailable` after 120 seconds without a received packet or a successful `/json` refresh. Switch control requires both C013 LAN connectivity and HTTP reachability from Home Assistant to the node's web port.
+Entities become `unavailable` after 120 seconds without a received packet or a successful `/json` refresh. Switch control requires HTTP reachability from Home Assistant to the node's web port. The integration also sends a best-effort C013 Type-0 command, but its result is not used to determine whether the switch command succeeded.
 
 </details>
 
