@@ -20,7 +20,6 @@ from custom_components.espeasy_p2p.const import NODE_OFFLINE_TIMEOUT
 from custom_components.espeasy_p2p.protocol import TaskConfig, TaskValues
 from custom_components.espeasy_p2p.sensor import ESPEasyP2PValueSensor
 
-
 from conftest import TEST_IP, knoten
 
 
@@ -64,7 +63,6 @@ async def test_sensor_entity_id_change_hook_is_safe(integriert) -> None:
         value_index=0,
     )
     entity.async_entity_id_changed("sensor.old_name")
-
 
 
 # ── Wer wird Sensor, wer nicht? ───────────────────────────────────────
