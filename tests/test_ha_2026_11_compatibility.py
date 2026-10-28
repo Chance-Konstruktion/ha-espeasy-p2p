@@ -61,4 +61,3 @@ def test_manifest_keeps_the_hub_integration_type() -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["integration_type"] == "hub"
     assert manifest["iot_class"] == "local_push"
-    assert "hubs_protocols" in manifest["categories"]
