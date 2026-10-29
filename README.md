@@ -177,7 +177,7 @@ On every ESPEasy or RPiEasy unit, in **Controllers → Add → ESPEasy P2P (C013
 ```yaml
 Controller IP:   <your Home Assistant IP>
 Controller Port: 8266
-Unit Number:     <unique 1–255 per node>
+Unit Number:     <unique 1–254 per node; avoid HA's unit number>
 Enabled:         ✓
 ```
 
@@ -205,9 +205,9 @@ Two-way control is supported for tasks that map to writable GPIOs.
 <details>
 <summary><b>How HA → node packets are addressed</b></summary>
 
-When you flip a switch in Lovelace, `espeasy_p2p` sends a **unicast** C013 frame to the node's last-seen IP with the target task index and the new value. The node executes the command locally — no acknowledgement is required because the next sensor broadcast confirms the new state.
+When you flip a switch in Lovelace, `espeasy_p2p` sends best-effort C013 Type-0 command packets to the node's last-seen IP, then tries the same candidate command or commands through the node's HTTP `/control` endpoint. C013 delivery is not acknowledged, and stock ESPEasy may ignore Type-0 commands. If configured, a custom command template is used on its own; otherwise the integration tries a configured GPIO command, then RPiEasy's `taskvaluesetandrun` form when the task/value names are available, and finally a task-name command. It accepts the first HTTP 200 response whose body looks successful and updates the local switch state only then. On failure, the displayed state is left unchanged. Later C013 pushes and the periodic `/json` refresh resynchronise the state with the node.
 
-There is no end-to-end acknowledgement for C013 commands. A switch's HTTP command path reports failures and leaves its displayed state unchanged on an unsuccessful command. Entities become `unavailable` after 120 seconds without a received packet or a successful `/json` refresh.
+Entities become `unavailable` after 120 seconds without a received packet or a successful `/json` refresh. Switch control requires HTTP reachability from Home Assistant to the node's web port. The integration also sends a best-effort C013 Type-0 command, but its result is not used to determine whether the switch command succeeded.
 
 </details>
 
@@ -216,7 +216,7 @@ There is no end-to-end acknowledgement for C013 commands. A switch's HTTP comman
 
 - **No encryption.** C013 is plain UDP — keep it on a trusted VLAN.
 - **No C013 acknowledgement.** The HTTP command path provides a best-effort fallback, but this is not a delivery guarantee. Automations should check the switch's resulting state and entity availability.
-- **Unit numbers must be unique** across your LAN. Duplicate IDs = entity collisions.
+- **Unit numbers must be unique** across your LAN, including the HA unit configured in the integration (default `250`). Duplicate IDs can collide, and `255` is used as a broadcast marker by some firmware.
 
 </details>
 
@@ -348,7 +348,7 @@ than relying on HA to catch it.
 <details>
 <summary><b>🌀 Duplicate entities after a unit-number change</b></summary>
 
-Use `espeasy_p2p.reload_unit` or remove the device under **Settings → Devices & Services** and let it rediscover.
+Remove the stale node under **Settings → Devices & Services → ESPEasy P2P → device → Delete**, or call `espeasy_p2p.remove_node` with the old unit number. Then let the node announce itself again with its new, unique unit number.
 </details>
 
 <details>
