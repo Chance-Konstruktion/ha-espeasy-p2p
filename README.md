@@ -380,10 +380,12 @@ PRs and issues welcome. Especially:
 
 ```bash
 git clone https://gitlab.schanz.ipv64.net/chance-konstruktion/espeasy-p2p
-cd ha-espeasy-p2p
-pip install -r requirements_test.txt
+cd espeasy-p2p
+pip install pytest pytest-asyncio
 pytest -q
 ```
+
+The `tests_ha/` suite additionally needs a real Home Assistant: `pip install -r requirements_test_ha.txt`.
 
 ---
 

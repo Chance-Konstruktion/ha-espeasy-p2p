@@ -81,3 +81,18 @@ def test_readme_beschreibt_den_sensorrahmen_ohne_plugin_id():
     assert "0xFF" in text
     assert "- **Plugin ID**" not in text
     assert "type-3 config frame" in text
+
+
+def test_readme_beitragen_anleitung_isst_was_es_gibt():
+    """Fund 6: requirements_test.txt existiert nicht (nur
+    requirements_test_ha.txt), und der Klonordner heisst espeasy-p2p,
+    nicht ha-espeasy-p2p -- der Contributing-Block brach an beiden
+    Stellen. Die Installationszeile entspricht jetzt dem, was die CI
+    fuer die kernlose Suite auch anzieht (pytest + pytest-asyncio)."""
+    text = _lies("README.md")
+    assert "requirements_test.txt" not in text.replace(
+        "requirements_test_ha.txt", ""
+    )
+    assert "cd espeasy-p2p" in text
+    assert "cd ha-espeasy-p2p" not in text
+    assert "requirements_test_ha.txt" in text
