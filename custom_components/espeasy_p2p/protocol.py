@@ -256,9 +256,17 @@ async def create_listener(
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     except OSError:
         pass
-    sock.bind(("0.0.0.0", port))
-    sock.setblocking(False)
-    transport, protocol = await loop.create_datagram_endpoint(
-        protocol_factory, sock=sock
-    )
+    try:
+        sock.bind(("0.0.0.0", port))
+        sock.setblocking(False)
+        transport, protocol = await loop.create_datagram_endpoint(
+            protocol_factory, sock=sock
+        )
+    except BaseException:
+        # Scheitert bind oder create_datagram_endpoint, gehoert der Sockel
+        # niemandem mehr: zuklappen, statt ihn im NotReady-Wiederholzyklus
+        # pro Versuch einmal in der Luft haengen zu lassen (der Refcount-
+        # Abgriff des CPython-Interpreters ist kein Vertrag).
+        sock.close()
+        raise
     return transport, protocol  # type: ignore[return-value]
