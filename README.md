@@ -92,7 +92,7 @@ Explicit value names map temperature, humidity, pressure and illuminance to Home
 <td>
 
 **🇩🇪 🇬🇧 Bilingual UI**
-Config flow, options, repair issues — fully translated DE + EN.
+Config flow, options and services — fully translated DE + EN.
 
 </td>
 </tr>

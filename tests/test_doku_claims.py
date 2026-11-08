@@ -96,3 +96,12 @@ def test_readme_beitragen_anleitung_isst_was_es_gibt():
     assert "cd espeasy-p2p" in text
     assert "cd ha-espeasy-p2p" not in text
     assert "requirements_test_ha.txt" in text
+
+
+def test_readme_verspricht_keine_repair_issues():
+    """Fund 7: Die Integration erzeugt keine Repair-Issues -- kein
+    async_create_issue im Code, strings.json ohne issues-Sektion. Das
+    'repair issues' im Bilingual-Bullet versprach also etwas, das es
+    nicht gibt; uebersetzt sind Config-Flow, Optionen und Dienste."""
+    text = _lies("README.md")
+    assert "repair issues" not in text
