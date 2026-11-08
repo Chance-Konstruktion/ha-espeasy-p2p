@@ -48,3 +48,13 @@ def test_info_md_nennt_den_wertnamen_nicht_die_plugin_id_als_massgebend():
     text = _lies("info.md")
     assert "from the plugin ID" not in text
     assert "value name" in text
+
+
+def test_info_md_verspricht_keine_sensor_restaurierung():
+    """Fund 4: Nur Schalter restaurieren ihren Zustand ueber den Neustart
+    (switch.py async_added_to_hass); Sensorwerte starten bewusst leer und
+    leben mit dem naechsten Paket oder /json-Abgleich wieder auf -- die
+    README (Zeile 74-75) sagt es richtig."""
+    text = _lies("info.md")
+    assert "last values survive HA restarts" not in text
+    assert "sensor values" in text and "resume" in text

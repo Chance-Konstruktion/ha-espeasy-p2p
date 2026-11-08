@@ -16,7 +16,8 @@ relays can be switched back from Lovelace.
 - **Two-way switching** — toggle relays, GPIOs and PWM from Lovelace
 - **Unit-aware** — HA picks the right device class and unit from the task
   value name, with the plugin ID only as a fallback
-- **Persistent state** — last values survive HA restarts
+- **Persistent state** — switch states survive HA restarts; sensor values
+  resume when the next packet or `/json` refresh arrives
 - **Health watchdog** — sensor and switch entities turn `unavailable` after
   120 seconds without traffic; there are no separate `last_seen` or
   `available` entities
