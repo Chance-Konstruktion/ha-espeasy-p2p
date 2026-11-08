@@ -218,6 +218,7 @@ Entities become `unavailable` after 120 seconds without a received packet or a s
 <summary><b>Known limitations</b></summary>
 
 - **No encryption.** C013 is plain UDP — keep it on a trusted VLAN.
+- **C013 trusts its senders.** Anyone who can send UDP datagrams on that LAN can impersonate a node, fake task and value names included — and the switch control path will carry such names as commands to real nodes.
 - **No C013 acknowledgement.** The HTTP command path provides a best-effort fallback, but this is not a delivery guarantee. Automations should check the switch's resulting state and entity availability.
 - **Unit numbers must be unique** across your LAN, including the HA unit configured in the integration (default `250`). Duplicate IDs can collide, and `255` is used as a broadcast marker by some firmware.
 - **Temperatures are shown in °C.** The C013 wire carries no units, so a node configured for °F still gets its temperature values mapped as °C. There is currently no override.

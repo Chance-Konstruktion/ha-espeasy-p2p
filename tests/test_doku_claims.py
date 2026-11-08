@@ -116,3 +116,14 @@ def test_readme_legt_die_temperatureinheit_offen():
     begrenzungen = text.split("Known limitations", 1)[1]
     assert "°F" in begrenzungen
     assert "°C" in begrenzungen
+
+
+def test_readme_legt_das_vertrauensmodell_offen():
+    """Anmerkung 14: C013 vertraut seinen Absendern -- wer im LAN spoofen
+    kann, kann Task- und Wertnamen faken, und der Schalterpfad baut aus
+    diesen Namen Befehle und schickt sie an echte Nodes. Ein ehrlicher
+    Satz dazu gehoert in die Known limitations."""
+    text = _lies("README.md")
+    begrenzungen = text.split("Known limitations", 1)[1]
+    assert "impersonate" in begrenzungen
+    assert "trusted VLAN" in begrenzungen
