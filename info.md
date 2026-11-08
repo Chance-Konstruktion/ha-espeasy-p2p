@@ -14,7 +14,8 @@ relays can be switched back from Lovelace.
 - **Auto-discovery** — new nodes appear the moment they send their first packet
 - **All sensor types** — temperature, humidity, pressure, lux, switches, analog, counters
 - **Two-way switching** — toggle relays, GPIOs and PWM from Lovelace
-- **Unit-aware** — HA picks the right device class and unit from the plugin ID
+- **Unit-aware** — HA picks the right device class and unit from the task
+  value name, with the plugin ID only as a fallback
 - **Persistent state** — last values survive HA restarts
 - **Health watchdog** — sensor and switch entities turn `unavailable` after
   120 seconds without traffic; there are no separate `last_seen` or

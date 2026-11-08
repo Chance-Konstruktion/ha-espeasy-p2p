@@ -38,3 +38,13 @@ def test_info_md_leugnet_den_30_sekunden_abgleich_nicht():
     assert "no polling" not in text
     assert "pushed the moment it changes" not in text
     assert "30-second `/json`" in text
+
+
+def test_info_md_nennt_den_wertnamen_nicht_die_plugin_id_als_massgebend():
+    """Fund 3: _classify ordnet primaer nach dem Wertnamen zu (Temperature/
+    Humidity/Pressure/...), die Plugin-ID ist nur Ruefallebene
+    (sensor.py:_classify; der /json-Abgleich liest 'Type' nur als
+    plugin_type ein)."""
+    text = _lies("info.md")
+    assert "from the plugin ID" not in text
+    assert "value name" in text
