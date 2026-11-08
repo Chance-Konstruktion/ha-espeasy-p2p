@@ -132,13 +132,16 @@ Search, download, restart, add the integration. No YAML, no custom repo.
 <details>
 <summary><b>What's actually in the packet?</b></summary>
 
-A C013 frame is a small fixed-layout struct with:
+A C013 frame starts with a `0xFF` magic byte followed by a packet type
+byte. A sensor-data frame (type 5) is then a small fixed-layout struct
+with:
 
-- **Header** — protocol version + packet type (`SENSOR_DATA_PACKET` or similar)
 - **Source unit** — the ESPEasy unit ID (1–255)
 - **Task index** — which task on the node fired this
-- **Plugin ID** — DHT, BMP280, switch, analog, …
 - **Values 1–4** — up to four `float32` slots per task
+
+There is no plugin ID in the sensor frame — task metadata, including the
+plugin/device number, arrives separately in the type-3 config frame.
 
 `espeasy_p2p` binds each `(unit, task, value-index)` triple to one Home Assistant entity and feeds new floats straight into its state.
 

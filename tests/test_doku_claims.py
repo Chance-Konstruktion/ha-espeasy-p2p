@@ -67,3 +67,17 @@ def test_info_md_gibt_den_einheitenbereich_wie_die_readme_an():
     text = _lies("info.md")
     assert "1–255 per node" not in text
     assert "1–254 per node" in text
+
+
+def test_readme_beschreibt_den_sensorrahmen_ohne_plugin_id():
+    """Fund 5: Der Kopf ist 0xFF-Magie + Typbyte (const.PACKET_HEADER und
+    PACKET_TYPE_*), es gibt kein "protocol version"-Byte; und der
+    Typ-5-Sensorframe traegt keine Plugin-ID (SENSOR_DATA_STRUCT) -- die
+    steckt nur im Typ-3-Configframe (_handle_sensor_data, device_number).
+    Gegencheck gegen die im Docstring genannte rpieasy-Referenz: der Code
+    stimmt exakt, nur die Beschreibung nicht."""
+    text = _lies("README.md")
+    assert "protocol version" not in text
+    assert "0xFF" in text
+    assert "- **Plugin ID**" not in text
+    assert "type-3 config frame" in text
