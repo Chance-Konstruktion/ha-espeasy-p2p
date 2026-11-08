@@ -127,3 +127,15 @@ def test_readme_legt_das_vertrauensmodell_offen():
     begrenzungen = text.split("Known limitations", 1)[1]
     assert "impersonate" in begrenzungen
     assert "trusted VLAN" in begrenzungen
+
+
+def test_der_build_kommentar_nennt_die_ueberlaufgrenze():
+    """Anmerkung 15: Der alte Kommentar rechnete "max value is
+    YY99 * 1000 + 366 = 99366 > 65535 only past 2065" und verschleierte
+    damit die echte Grenze: bis einschliesslich 2065 passt YY*1000+Tag
+    (65*1000+366 = 65366 <= 65535), ab 2066 laeuft es (66366) stumm
+    ueber. Der Kommentar muss das Jahr nennen, ab dem das Feld
+    ueberlaeuft."""
+    text = _lies("custom_components/espeasy_p2p/const.py")
+    assert "2066" in text
+    assert "65366" in text

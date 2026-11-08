@@ -85,10 +85,11 @@ SWITCH_VALUE_NAMES = frozenset({"state", "output", "relay", "switch"})
 HA_NODE_TYPE = 33
 
 # Build number HA reports on the wire. The C013 build field is 16 bits
-# (max 65535), so we encode it as YY * 1000 + day-of-year. That always
-# fits (max value is YY99 * 1000 + 366 = 99366 > 65535 only past 2065,
-# and ~26365 for any date in 2026). Earlier attempts used a YYMMDD
-# scheme that silently wrapped for months >= 7 in 2026 and beyond.
+# (max 65535), so we encode it as YY * 1000 + day-of-year. That fits
+# through the end of 2065 (65 * 1000 + 366 = 65366 <= 65535); from 2066
+# on it silently overflows the field (66 * 1000 + 366 = 66366), and
+# ~26365 for any date in 2026. Earlier attempts used a YYMMDD scheme
+# that silently wrapped for months >= 7 in 2026 and beyond.
 # 2026-05-02 -> day-of-year 122 -> 26122.
 HA_BUILD = 26122
 # Human-readable version shown in HA's own device info / log lines.
