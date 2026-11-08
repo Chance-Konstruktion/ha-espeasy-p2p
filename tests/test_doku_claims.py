@@ -139,3 +139,12 @@ def test_der_build_kommentar_nennt_die_ueberlaufgrenze():
     text = _lies("custom_components/espeasy_p2p/const.py")
     assert "2066" in text
     assert "65366" in text
+
+
+def test_readme_details_etiketten_sind_ausgewogen():
+    """Anmerkung 16: Hinter dem letzten Troubleshooting-Block hing ein
+    ueberzaehliges </details> -- oeffnende und schliessende Etiketten
+    muessen paarweise auftreten, sonst kippt die HTML-Struktur der
+    README."""
+    text = _lies("README.md")
+    assert text.count("<details>") == text.count("</details>")

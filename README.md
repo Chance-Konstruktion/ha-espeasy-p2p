@@ -368,7 +368,6 @@ service does the same thing by unit number. A node only comes back if it
 sends a fresh heartbeat afterwards, so deleting a retired unit makes it
 stay gone.
 </details>
-</details>
 
 ---
 
