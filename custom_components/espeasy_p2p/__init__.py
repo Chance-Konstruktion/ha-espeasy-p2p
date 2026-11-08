@@ -91,7 +91,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 c.async_scan()
 
         async def _handle_refetch(_call: ServiceCall) -> None:
-            for c in hass.data.get(DOMAIN, {}).values():
+            # Schnappschuss: Diese Schleife wartet pro Eintrag (await) und
+            # iteriert danach weiter. Ein in genau diesem Fenster
+            # hereingerutschter Reload (set_gpio_pin kann einen ausloesen)
+            # wuerde sonst 'dictionary changed size during iteration'
+            # werfen. Dasselbe Fenster hat remove_node unten;
+            # send_command/set_gpio_pin iterieren nach ihrem await nicht
+            # mehr bzw. ohne await durch, fuer sie ist kein Fehler
+            # erreichbar.
+            for c in list(hass.data.get(DOMAIN, {}).values()):
                 await c.async_refetch_metadata()
 
         async def _handle_send_command(call: ServiceCall) -> None:
@@ -155,7 +163,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 raise HomeAssistantError(
                     "remove_node requires the field 'unit'"
                 ) from err
-            for c in hass.data.get(DOMAIN, {}).values():
+            # Siehe _handle_refetch: await in der Schleife, danach wird
+            # weiteriteriert -- ein Reload in diesem Fenster kippt sonst
+            # die Iteration.
+            for c in list(hass.data.get(DOMAIN, {}).values()):
                 if await c.async_remove_node(unit):
                     return
             _LOGGER.warning("remove_node: unit %d not found", unit)

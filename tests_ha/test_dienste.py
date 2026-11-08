@@ -208,6 +208,35 @@ async def test_dienste_lehnen_fehlende_felder_sauber_ab(
             assert dienst in str(meldung.value), fehlendes_feld
 
 
+async def test_dienste_ueberstehen_verzeichnis_aenderungen_waehrend_des_aufrufs(
+    integriert, hass: HomeAssistant, monkeypatch
+) -> None:
+    """Fund 9: remove_node und refetch_metadata warten in der Schleife ueber
+    hass.data[DOMAIN] und iterieren danach weiter. Mischet sich genau in
+    diesem Fenster ein Reload (den set_gpio_pin ueber den Update-Listener
+    ausloesen kann) ins Verzeichnis, kippt sonst 'dictionary changed size
+    during iteration' mitten im Dienstaufruf. Der Schnappschuss vor der
+    Schleife muss das abfangen."""
+    verzeichnis = hass.data.setdefault(DOMAIN, {})
+    integriert.nodes[5] = knoten(5, ip="0.0.0.0")
+    integriert.tasks[(5, 0)] = type("T", (), {"src_unit": 5, "task_index": 0})()
+
+    async def einmischender_entferner(unit):
+        verzeichnis["reload"] = integriert  # das Fenster des Reloads
+        return False  # nichts gefunden: der Handler muss weiteriterieren
+
+    monkeypatch.setattr(integriert, "async_remove_node", einmischender_entferner)
+    await hass.services.async_call(DOMAIN, "remove_node", {"unit": 5}, blocking=True)
+
+    async def einmischender_nachlad():
+        verzeichnis["reload"] = integriert
+
+    monkeypatch.setattr(integriert, "async_refetch_metadata", einmischender_nachlad)
+    await hass.services.async_call(DOMAIN, "refetch_metadata", {}, blocking=True)
+
+    del verzeichnis["reload"]
+
+
 # ── Geraeteloeschung ueber die Weboberflaeche ─────────────────────────
 
 
