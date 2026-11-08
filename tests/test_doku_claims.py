@@ -27,3 +27,14 @@ def test_info_md_zaehlt_keinen_verfuegbarkeits_sensor():
     assert "unavailable" in text, (
         "die Watchdog-Aussage muss die echte Verfügbarkeit beschreiben"
     )
+
+
+def test_info_md_leugnet_den_30_sekunden_abgleich_nicht():
+    """Fund 2: Es gibt einen 30-Sekunden-/json-Abgleich (const.py:
+    VALUE_REFRESH_INTERVAL, coordinator._value_refresh_loop) -- info.md
+    behauptete das Gegenteil ('no polling', 'pushed the moment it
+    changes')."""
+    text = _lies("info.md")
+    assert "no polling" not in text
+    assert "pushed the moment it changes" not in text
+    assert "30-second `/json`" in text

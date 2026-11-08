@@ -1,11 +1,12 @@
 # ESPEasy & RPiEasy P2P (C013) for Home Assistant
 
 **Push-based, local-first bridge between ESPEasy / RPiEasy nodes and Home
-Assistant — no MQTT, no cloud, no polling.** Pure UDP via the native C013
-peer-to-peer protocol.
+Assistant — no MQTT, no cloud.** Pure UDP via the native C013 peer-to-peer
+protocol, with a 30-second `/json` refresh as a safety net.
 
 Set your nodes to the **C013 (ESPEasy/RPiEasy P2P)** controller and they show
-up in Home Assistant on their own. Every value is pushed the moment it changes;
+up in Home Assistant on their own. Values normally arrive as C013 pushes; a
+30-second `/json` refresh catches changes the node does not broadcast, and
 relays can be switched back from Lovelace.
 
 ## Features
