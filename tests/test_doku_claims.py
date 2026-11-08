@@ -105,3 +105,14 @@ def test_readme_verspricht_keine_repair_issues():
     nicht gibt; uebersetzt sind Config-Flow, Optionen und Dienste."""
     text = _lies("README.md")
     assert "repair issues" not in text
+
+
+def test_readme_legt_die_temperatureinheit_offen():
+    """Fund 11: Temperatur wird stets als Grad C gemappt
+    (sensor.py:_classify, UnitOfTemperature.CELSIUS); Nodes, die auf
+    Fahrenheit eingestellt sind, bekommen die falsche Einheit -- und das
+    muss in den Known limitations stehen, nicht unerwaehnt bleiben."""
+    text = _lies("README.md")
+    begrenzungen = text.split("Known limitations", 1)[1]
+    assert "°F" in begrenzungen
+    assert "°C" in begrenzungen
