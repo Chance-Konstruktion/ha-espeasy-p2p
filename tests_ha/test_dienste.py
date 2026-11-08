@@ -17,7 +17,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -184,6 +184,57 @@ async def test_remove_node_unbekannte_einheit(
 ) -> None:
     await hass.services.async_call(DOMAIN, "remove_node", {"unit": 99}, blocking=True)
     assert "remove_node: unit 99 not found" in caplog.text
+
+
+# ── Fehlende Felder bei Direktaufrufen ────────────────────────────────
+
+
+async def test_dienste_lehnen_fehlende_felder_sauber_ab(
+    integriert, hass: HomeAssistant
+) -> None:
+    """Fund 8: Das 'required' in services.yaml ist eine Zusage des
+    Frontends, keine serverseitige Sperre -- ein Skript kann jeden Dienst
+    direkt ohne Felder aufrufen. Dann darf kein KeyError-Traceback
+    entstehen, sondern eine benennbare Meldung."""
+    for dienst, felder in (
+        ("send_command", {"unit": 5, "command": "restart"}),
+        ("set_gpio_pin", {"unit": 5, "task_name": "Relais", "pin": 26}),
+        ("remove_node", {"unit": 5}),
+    ):
+        for fehlendes_feld in felder:
+            stumm = {k: v for k, v in felder.items() if k != fehlendes_feld}
+            with pytest.raises(HomeAssistantError) as meldung:
+                await hass.services.async_call(DOMAIN, dienst, stumm, blocking=True)
+            assert dienst in str(meldung.value), fehlendes_feld
+
+
+async def test_dienste_ueberstehen_verzeichnis_aenderungen_waehrend_des_aufrufs(
+    integriert, hass: HomeAssistant, monkeypatch
+) -> None:
+    """Fund 9: remove_node und refetch_metadata warten in der Schleife ueber
+    hass.data[DOMAIN] und iterieren danach weiter. Mischet sich genau in
+    diesem Fenster ein Reload (den set_gpio_pin ueber den Update-Listener
+    ausloesen kann) ins Verzeichnis, kippt sonst 'dictionary changed size
+    during iteration' mitten im Dienstaufruf. Der Schnappschuss vor der
+    Schleife muss das abfangen."""
+    verzeichnis = hass.data.setdefault(DOMAIN, {})
+    integriert.nodes[5] = knoten(5, ip="0.0.0.0")
+    integriert.tasks[(5, 0)] = type("T", (), {"src_unit": 5, "task_index": 0})()
+
+    async def einmischender_entferner(unit):
+        verzeichnis["reload"] = integriert  # das Fenster des Reloads
+        return False  # nichts gefunden: der Handler muss weiteriterieren
+
+    monkeypatch.setattr(integriert, "async_remove_node", einmischender_entferner)
+    await hass.services.async_call(DOMAIN, "remove_node", {"unit": 5}, blocking=True)
+
+    async def einmischender_nachlad():
+        verzeichnis["reload"] = integriert
+
+    monkeypatch.setattr(integriert, "async_refetch_metadata", einmischender_nachlad)
+    await hass.services.async_call(DOMAIN, "refetch_metadata", {}, blocking=True)
+
+    del verzeichnis["reload"]
 
 
 # ── Geraeteloeschung ueber die Weboberflaeche ─────────────────────────

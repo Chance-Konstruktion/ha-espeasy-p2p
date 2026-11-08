@@ -161,7 +161,13 @@ def async_setup_spatial(
     async def run(kind: str, item_id: str, action_id: str, payload: dict) -> dict:
         if action_id != "resync" or not item_id.startswith("unit-"):
             return {"success": False, "error": "unbekannte Aktion"}
-        coordinator.async_schedule_resync(int(item_id.removeprefix("unit-")))
+        try:
+            unit = int(item_id.removeprefix("unit-"))
+        except ValueError:
+            # "unit-xyz" oder "unit-": kein ValueError aus der Aktion -- der
+            # Hub bekommt ein sauberes Nein wie bei unbekannter Aktion.
+            return {"success": False, "error": "unbekannte Aktion"}
+        coordinator.async_schedule_resync(unit)
         return {"success": True}
 
     provider = spatial_provider(

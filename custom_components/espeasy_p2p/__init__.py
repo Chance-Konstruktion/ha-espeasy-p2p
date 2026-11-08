@@ -7,7 +7,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
@@ -91,12 +91,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 c.async_scan()
 
         async def _handle_refetch(_call: ServiceCall) -> None:
-            for c in hass.data.get(DOMAIN, {}).values():
+            # Schnappschuss: Diese Schleife wartet pro Eintrag (await) und
+            # iteriert danach weiter. Ein in genau diesem Fenster
+            # hereingerutschter Reload (set_gpio_pin kann einen ausloesen)
+            # wuerde sonst 'dictionary changed size during iteration'
+            # werfen. Dasselbe Fenster hat remove_node unten;
+            # send_command/set_gpio_pin iterieren nach ihrem await nicht
+            # mehr bzw. ohne await durch, fuer sie ist kein Fehler
+            # erreichbar.
+            for c in list(hass.data.get(DOMAIN, {}).values()):
                 await c.async_refetch_metadata()
 
         async def _handle_send_command(call: ServiceCall) -> None:
-            unit = int(call.data["unit"])
-            command = str(call.data["command"])
+            try:
+                unit = int(call.data["unit"])
+                command = str(call.data["command"])
+            except (KeyError, TypeError, ValueError) as err:
+                # Das 'required' in services.yaml ist eine Frontend-Zusage;
+                # Skripte rufen Dienste direkt auf. Ohne Feld: eine saubere
+                # Meldung, kein KeyError-Traceback.
+                raise HomeAssistantError(
+                    "send_command requires the fields 'unit' and 'command'"
+                ) from err
             for c in hass.data.get(DOMAIN, {}).values():
                 if unit in c.nodes:
                     await c.async_send_raw_command(unit, command)
@@ -104,9 +120,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning("send_command: unit %d not found in any entry", unit)
 
         async def _handle_set_gpio_pin(call: ServiceCall) -> None:
-            unit = int(call.data["unit"])
-            task_name = str(call.data["task_name"]).strip()
-            pin = int(call.data["pin"])
+            try:
+                unit = int(call.data["unit"])
+                task_name = str(call.data["task_name"]).strip()
+                pin = int(call.data["pin"])
+            except (KeyError, TypeError, ValueError) as err:
+                raise HomeAssistantError(
+                    "set_gpio_pin requires the fields 'unit', 'task_name' and 'pin'"
+                ) from err
             # The selector in services.yaml is a frontend hint, not a
             # server-side invariant: scripts can call services directly.
             if not 0 <= pin <= 40:
@@ -136,8 +157,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning("set_gpio_pin: unit %d not found", unit)
 
         async def _handle_remove_node(call: ServiceCall) -> None:
-            unit = int(call.data["unit"])
-            for c in hass.data.get(DOMAIN, {}).values():
+            try:
+                unit = int(call.data["unit"])
+            except (KeyError, TypeError, ValueError) as err:
+                raise HomeAssistantError(
+                    "remove_node requires the field 'unit'"
+                ) from err
+            # Siehe _handle_refetch: await in der Schleife, danach wird
+            # weiteriteriert -- ein Reload in diesem Fenster kippt sonst
+            # die Iteration.
+            for c in list(hass.data.get(DOMAIN, {}).values()):
                 if await c.async_remove_node(unit):
                     return
             _LOGGER.warning("remove_node: unit %d not found", unit)

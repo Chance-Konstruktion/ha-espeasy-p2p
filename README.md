@@ -92,7 +92,7 @@ Explicit value names map temperature, humidity, pressure and illuminance to Home
 <td>
 
 **🇩🇪 🇬🇧 Bilingual UI**
-Config flow, options, repair issues — fully translated DE + EN.
+Config flow, options and services — fully translated DE + EN.
 
 </td>
 </tr>
@@ -132,13 +132,16 @@ Search, download, restart, add the integration. No YAML, no custom repo.
 <details>
 <summary><b>What's actually in the packet?</b></summary>
 
-A C013 frame is a small fixed-layout struct with:
+A C013 frame starts with a `0xFF` magic byte followed by a packet type
+byte. A sensor-data frame (type 5) is then a small fixed-layout struct
+with:
 
-- **Header** — protocol version + packet type (`SENSOR_DATA_PACKET` or similar)
 - **Source unit** — the ESPEasy unit ID (1–255)
 - **Task index** — which task on the node fired this
-- **Plugin ID** — DHT, BMP280, switch, analog, …
 - **Values 1–4** — up to four `float32` slots per task
+
+There is no plugin ID in the sensor frame — task metadata, including the
+plugin/device number, arrives separately in the type-3 config frame.
 
 `espeasy_p2p` binds each `(unit, task, value-index)` triple to one Home Assistant entity and feeds new floats straight into its state.
 
@@ -215,8 +218,10 @@ Entities become `unavailable` after 120 seconds without a received packet or a s
 <summary><b>Known limitations</b></summary>
 
 - **No encryption.** C013 is plain UDP — keep it on a trusted VLAN.
+- **C013 trusts its senders.** Anyone who can send UDP datagrams on that LAN can impersonate a node, fake task and value names included — and the switch control path will carry such names as commands to real nodes.
 - **No C013 acknowledgement.** The HTTP command path provides a best-effort fallback, but this is not a delivery guarantee. Automations should check the switch's resulting state and entity availability.
 - **Unit numbers must be unique** across your LAN, including the HA unit configured in the integration (default `250`). Duplicate IDs can collide, and `255` is used as a broadcast marker by some firmware.
+- **Temperatures are shown in °C.** The C013 wire carries no units, so a node configured for °F still gets its temperature values mapped as °C. There is currently no override.
 
 </details>
 
@@ -363,7 +368,6 @@ service does the same thing by unit number. A node only comes back if it
 sends a fresh heartbeat afterwards, so deleting a retired unit makes it
 stay gone.
 </details>
-</details>
 
 ---
 
@@ -377,10 +381,12 @@ PRs and issues welcome. Especially:
 
 ```bash
 git clone https://gitlab.schanz.ipv64.net/chance-konstruktion/espeasy-p2p
-cd ha-espeasy-p2p
-pip install -r requirements_test.txt
+cd espeasy-p2p
+pip install pytest pytest-asyncio
 pytest -q
 ```
+
+The `tests_ha/` suite additionally needs a real Home Assistant: `pip install -r requirements_test_ha.txt`.
 
 ---
 

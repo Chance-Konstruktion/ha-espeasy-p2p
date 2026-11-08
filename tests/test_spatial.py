@@ -240,6 +240,18 @@ async def test_a_made_up_action_is_refused_rather_than_guessed(mesh):
     assert coordinator.resynced == []
 
 
+@pytest.mark.asyncio
+async def test_a_broken_unit_id_is_refused_not_raised(mesh):
+    """'unit-xyz' must not throw a ValueError out of the hub action --
+    the hub gets a clean no, like for an unknown action."""
+    hass, _, coordinator = mesh
+    run = hass.registrations["espeasy_p2p"]["action"]
+
+    assert (await run("node", "unit-xyz", "resync", {}))["success"] is False
+    assert (await run("node", "unit-", "resync", {}))["success"] is False
+    assert coordinator.resynced == []
+
+
 # ── The doors in the popup ────────────────────────────────────────────
 
 

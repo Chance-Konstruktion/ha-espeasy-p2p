@@ -424,3 +424,53 @@ def test_detect_local_ip_liefert_die_sockeladresse(monkeypatch):
 
     monkeypatch.setattr(p.socket, "socket", LokalerSockel)
     assert p.detect_local_ip() == "192.168.7.10"
+
+
+# ── Der Empfangssockel ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_empfangssockel_klappt_bei_scheitern_zu(monkeypatch):
+    """Fund 10: Scheitert bind oder create_datagram_endpoint, blieb der
+    Sockel ungeschlossen in der Luft -- im NotReady-Wiederholzyklus einer
+    pro Versuch. Der Sockel gehoert nach dem Scheitern niemandem mehr und
+    muss vom Erzeuger zugeklappt werden."""
+
+    geschlossen = []
+
+    class AttrappenSockel:
+        def setsockopt(self, *args):
+            pass
+
+        def bind(self, adresse):
+            pass
+
+        def setblocking(self, flag):
+            pass
+
+        def close(self):
+            geschlossen.append(True)
+
+    monkeypatch.setattr(protocol.socket, "socket", lambda *a, **k: AttrappenSockel())
+
+    class ScheiternderLoop:
+        async def create_datagram_endpoint(self, fabrik, sock):
+            raise OSError("Endpunkt verweigert")
+
+    with pytest.raises(OSError):
+        await protocol.create_listener(ScheiternderLoop(), 8266, object)
+    assert geschlossen == [True], (
+        "der Sockel wurde beim Scheitern von create_datagram_endpoint nicht geschlossen"
+    )
+
+    class BindVerweigerer(AttrappenSockel):
+        def bind(self, adresse):
+            raise OSError("Port belegt")
+
+    monkeypatch.setattr(protocol.socket, "socket", lambda *a, **k: BindVerweigerer())
+    geschlossen.clear()
+    with pytest.raises(OSError):
+        await protocol.create_listener(ScheiternderLoop(), 8266, object)
+    assert geschlossen == [True], (
+        "der Sockel wurde beim Scheitern von bind nicht geschlossen"
+    )

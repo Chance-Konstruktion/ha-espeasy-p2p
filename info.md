@@ -1,11 +1,12 @@
 # ESPEasy & RPiEasy P2P (C013) for Home Assistant
 
 **Push-based, local-first bridge between ESPEasy / RPiEasy nodes and Home
-Assistant — no MQTT, no cloud, no polling.** Pure UDP via the native C013
-peer-to-peer protocol.
+Assistant — no MQTT, no cloud.** Pure UDP via the native C013 peer-to-peer
+protocol, with a 30-second `/json` refresh as a safety net.
 
 Set your nodes to the **C013 (ESPEasy/RPiEasy P2P)** controller and they show
-up in Home Assistant on their own. Every value is pushed the moment it changes;
+up in Home Assistant on their own. Values normally arrive as C013 pushes; a
+30-second `/json` refresh catches changes the node does not broadcast, and
 relays can be switched back from Lovelace.
 
 ## Features
@@ -13,10 +14,14 @@ relays can be switched back from Lovelace.
 - **Auto-discovery** — new nodes appear the moment they send their first packet
 - **All sensor types** — temperature, humidity, pressure, lux, switches, analog, counters
 - **Two-way switching** — toggle relays, GPIOs and PWM from Lovelace
-- **Unit-aware** — HA picks the right device class and unit from the plugin ID
-- **Persistent state** — last values survive HA restarts
-- **Health watchdog** — per-node `last_seen` plus an `available` sensor
-- **Bilingual UI** — config flow, options and repairs fully translated DE + EN
+- **Unit-aware** — HA picks the right device class and unit from the task
+  value name, with the plugin ID only as a fallback
+- **Persistent state** — switch states survive HA restarts; sensor values
+  resume when the next packet or `/json` refresh arrives
+- **Health watchdog** — sensor and switch entities turn `unavailable` after
+  120 seconds without traffic; there are no separate `last_seen` or
+  `available` entities
+- **Bilingual UI** — config flow, options and services fully translated DE + EN
 
 ## Quick setup
 
@@ -30,7 +35,7 @@ relays can be switched back from Lovelace.
    | :--- | :--- |
    | Controller IP | your Home Assistant IP |
    | Controller Port | 8266 |
-   | Unit Number | unique 1–255 per node |
+   | Unit Number | unique 1–254 per node |
    | Enabled | yes |
 
 Within seconds the device shows up under ESPEasy P2P.
