@@ -35,7 +35,7 @@ relays can be switched back from Lovelace.
    | :--- | :--- |
    | Controller IP | your Home Assistant IP |
    | Controller Port | 8266 |
-   | Unit Number | unique 1–255 per node |
+   | Unit Number | unique 1–254 per node |
    | Enabled | yes |
 
 Within seconds the device shows up under ESPEasy P2P.

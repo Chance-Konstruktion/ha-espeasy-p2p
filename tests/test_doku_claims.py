@@ -58,3 +58,12 @@ def test_info_md_verspricht_keine_sensor_restaurierung():
     text = _lies("info.md")
     assert "last values survive HA restarts" not in text
     assert "sensor values" in text and "resume" in text
+
+
+def test_info_md_gibt_den_einheitenbereich_wie_die_readme_an():
+    """Fund 13: 255 ist Broadcast-Marker (const.BROADCAST_UNIT, README
+    Known limitations); gueltige Knotennummern sind 1-254. info.md sagte
+    'unique 1-255 per node' und widersprach damit der README."""
+    text = _lies("info.md")
+    assert "1–255 per node" not in text
+    assert "1–254 per node" in text
