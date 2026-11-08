@@ -102,9 +102,13 @@ def test_readme_verspricht_keine_repair_issues():
     """Fund 7: Die Integration erzeugt keine Repair-Issues -- kein
     async_create_issue im Code, strings.json ohne issues-Sektion. Das
     'repair issues' im Bilingual-Bullet versprach also etwas, das es
-    nicht gibt; uebersetzt sind Config-Flow, Optionen und Dienste."""
+    nicht gibt; uebersetzt sind Config-Flow, Optionen und Dienste.
+    Fund (pc-bd): dieselbe Zusage stand in info.md im Bilingual-Bullet
+    ('options and repairs') -- der Pin prueft jetzt beide Dateien."""
     text = _lies("README.md")
     assert "repair issues" not in text
+    info = _lies("info.md")
+    assert "repairs" not in info
 
 
 def test_readme_legt_die_temperatureinheit_offen():

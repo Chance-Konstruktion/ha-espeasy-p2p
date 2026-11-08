@@ -21,7 +21,7 @@ relays can be switched back from Lovelace.
 - **Health watchdog** — sensor and switch entities turn `unavailable` after
   120 seconds without traffic; there are no separate `last_seen` or
   `available` entities
-- **Bilingual UI** — config flow, options and repairs fully translated DE + EN
+- **Bilingual UI** — config flow, options and services fully translated DE + EN
 
 ## Quick setup
 
