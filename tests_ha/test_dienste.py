@@ -17,7 +17,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -184,6 +184,28 @@ async def test_remove_node_unbekannte_einheit(
 ) -> None:
     await hass.services.async_call(DOMAIN, "remove_node", {"unit": 99}, blocking=True)
     assert "remove_node: unit 99 not found" in caplog.text
+
+
+# ── Fehlende Felder bei Direktaufrufen ────────────────────────────────
+
+
+async def test_dienste_lehnen_fehlende_felder_sauber_ab(
+    integriert, hass: HomeAssistant
+) -> None:
+    """Fund 8: Das 'required' in services.yaml ist eine Zusage des
+    Frontends, keine serverseitige Sperre -- ein Skript kann jeden Dienst
+    direkt ohne Felder aufrufen. Dann darf kein KeyError-Traceback
+    entstehen, sondern eine benennbare Meldung."""
+    for dienst, felder in (
+        ("send_command", {"unit": 5, "command": "restart"}),
+        ("set_gpio_pin", {"unit": 5, "task_name": "Relais", "pin": 26}),
+        ("remove_node", {"unit": 5}),
+    ):
+        for fehlendes_feld in felder:
+            stumm = {k: v for k, v in felder.items() if k != fehlendes_feld}
+            with pytest.raises(HomeAssistantError) as meldung:
+                await hass.services.async_call(DOMAIN, dienst, stumm, blocking=True)
+            assert dienst in str(meldung.value), fehlendes_feld
 
 
 # ── Geraeteloeschung ueber die Weboberflaeche ─────────────────────────
