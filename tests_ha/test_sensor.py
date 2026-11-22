@@ -190,6 +190,48 @@ async def test_ohne_wert_bleibt_unbekannt(integriert, hass: HomeAssistant) -> No
     assert hass.states.get(entity_id).state == "unknown"
 
 
+async def test_nan_slot_wird_unbekannt_und_geraet_die_messung_nicht(
+    integriert, hass: HomeAssistant
+) -> None:
+    """ESPEasy sendet NaN fuer leere Slots. Der NaN-Slot zeigt 'unknown',
+    die gueltigen Slots des selben Pakets aktualisieren trotzdem -- und
+    kein NaN/inf erreicht je den Zustandsspeicher (HA 2026.11 bricht
+    sonst beim Schreiben ab: 'Exception in _handle_update')."""
+    _online(integriert)
+    integriert._on_task(_task())  # Klima: Temperature + Humidity
+    await hass.async_block_till_done()
+    temperatur_id = await _sensor_entity_id(hass, 5, 0, 0)
+    feuchte_id = await _sensor_entity_id(hass, 5, 0, 1)
+
+    integriert._on_values(_werte(5, 0, [float("nan"), 45.0]))
+    await hass.async_block_till_done()
+
+    assert hass.states.get(temperatur_id).state == "unknown"
+    assert hass.states.get(feuchte_id).state == "45.0"
+
+
+async def test_native_value_zeigt_nie_nichtendliche_werte(integriert) -> None:
+    """Der direkte Vertrag an Home Assistant: native_value ist None oder
+    endlich. Egal welcher Weg einen nichtendlichen Wert in den
+    Koordinator getragen hat -- das Schreiben darf nie abbrechen."""
+    _online(integriert)
+    integriert.values[(5, 0)] = [
+        float("nan"), float("inf"), float("-inf"), 1.5,
+    ]
+    entities = [
+        ESPEasyP2PValueSensor(
+            coordinator=integriert,
+            entry_id="test-entry",
+            src_unit=5,
+            task_index=0,
+            value_index=index,
+        )
+        for index in range(4)
+    ]
+
+    assert [entity.native_value for entity in entities] == [None, None, None, 1.5]
+
+
 async def test_wertindex_jenseits_der_empfangenen_werte(
     integriert, hass: HomeAssistant
 ) -> None:

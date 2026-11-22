@@ -545,23 +545,30 @@ class ESPEasyP2PCoordinator:
             # without broadcasting them — chiefly a relay that switched itself
             # off via an internal timer/pulse. Only push an update when the
             # value actually changed, to avoid needless entity re-renders.
-            parsed: list[float] = []
-            saw_number = False
-            invalid_numeric = False
+            #
+            # Same rule as the C013 path: a slot that reports NaN (or a
+            # malformed entry) becomes None, "no value" -- never 0.0, which
+            # would pose as a real measurement. If the task reports nothing
+            # usable at all (RPiEasy answers with placeholders while its
+            # tasks are still initialising), the previous values stay put.
+            parsed: list[float | None] = []
+            saw_finite = False
             for tv in task_values:
                 if not isinstance(tv, dict):
-                    parsed.append(0.0)
+                    parsed.append(None)
                     continue
                 try:
                     value = float(tv.get("Value"))
-                    if not math.isfinite(value):
-                        invalid_numeric = True
-                    parsed.append(value)
-                    saw_number = True
                 except (TypeError, ValueError):
-                    parsed.append(0.0)
-            if saw_number and not invalid_numeric:
-                parsed = (parsed + [0.0, 0.0, 0.0, 0.0])[:4]
+                    parsed.append(None)
+                    continue
+                if math.isfinite(value):
+                    parsed.append(value)
+                    saw_finite = True
+                else:
+                    parsed.append(None)
+            if saw_finite:
+                parsed = (parsed + [None, None, None, None])[:4]
                 vkey = (node.unit, task_index)
                 if self.values.get(vkey) != parsed:
                     self.values[vkey] = parsed
@@ -703,17 +710,26 @@ class ESPEasyP2PCoordinator:
                     _LOGGER.debug("Probe announce to %s failed: %s", payload.src_ip, err)
             return
         self._touch(src_unit)
-        if any(not math.isfinite(value) for value in payload.values):
-            # Invalid measurements must not turn a switch into "off" (NaN
-            # compares false) or poison numeric sensor states. Packet receipt
-            # still counts as a heartbeat, but the previous values stay put.
+        # ESPEasy sends NaN for slots it cannot read (an unwired DHT slot,
+        # a not-yet-initialised RPiEasy task). Make the *slot* the "no
+        # value" (None) instead of dropping the whole packet: dropping
+        # froze the slots that did report -- the [nan, humidity, ...]
+        # case -- and a 0.0 would be a plausible-looking lie. Consumers
+        # (sensor, switch) treat None as "unknown".
+        values = [
+            value if math.isfinite(value) else None for value in payload.values
+        ]
+        if not any(value is not None for value in values):
+            # Nothing usable in this packet at all -- startup placeholders,
+            # most likely. Heartbeat counts (the touch above), but the
+            # previous values stay put rather than being blanked.
             _LOGGER.debug(
-                "Ignoring non-finite sensor values from unit=%d task=%d",
+                "Ignoring packet without any finite value from unit=%d task=%d",
                 src_unit, payload.task_index,
             )
             return
         key = (src_unit, payload.task_index)
-        self.values[key] = payload.values
+        self.values[key] = values
         # Track that this (unit, task) is alive even before we know the
         # real names. We deliberately do NOT create entities here from a
         # placeholder TaskConfig — the user does not want phantom "Task X
@@ -731,11 +747,13 @@ class ESPEasyP2PCoordinator:
             )
             self.tasks[key] = placeholder
         # Always rewrite payload.src_unit so downstream subscribers see the
-        # resolved unit, not the raw broadcast 255.
+        # resolved unit, not the raw broadcast 255. The dispatched values
+        # are the sanitised ones, so what entities will read is exactly
+        # what listeners saw.
         resolved = TaskValues(
             src_unit=src_unit,
             task_index=payload.task_index,
-            values=payload.values,
+            values=values,
             src_ip=payload.src_ip,
         )
         async_dispatcher_send(
