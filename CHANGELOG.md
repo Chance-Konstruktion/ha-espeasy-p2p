@@ -9,6 +9,8 @@ and the release date is obvious at a glance.
 
 ### Home Assistant 2026.11 compatibility
 - Add regression checks for config-flow step IDs, deprecated DeviceInfo parent links, and manifest metadata. The integration already prefers the per-config-entry device registry lookup and uses current DeviceInfo construction.
+- The spatial hub shim now dispatches its data-updated signal with the thread-safe `dispatcher_send`. Since HA 2026.11, `async_dispatcher_send` is rejected from any thread other than the event loop, and the notify is reached from both worlds.
+- Sensor readings that are not finite (ESPEasy's NaN for an unwired slot, and infinities) are per-slot "no value" (`unknown` on the entity) instead of aborting the state write: the coordinator stores `None` for those slots and keeps the slots that did report, a malformed `/json` value no longer poses as `0.0`, and `native_value` guarantees HA never receives a non-finite state.
 
 ### Fixed
 - Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.

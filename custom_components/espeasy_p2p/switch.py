@@ -201,7 +201,13 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
         values = self._coordinator.values.get((self._src_unit, self._task_index))
         if not values or self._value_index >= len(values):
             return None
-        return values[self._value_index] >= 0.5
+        value = values[self._value_index]
+        # None is the coordinator's "no value" (ESPEasy sends NaN for an
+        # unread slot); a switch with no reading is unknown, not off --
+        # NaN >= 0.5 would compare false and pose as "off".
+        if value is None:
+            return None
+        return value >= 0.5
 
     @property
     def available(self) -> bool:

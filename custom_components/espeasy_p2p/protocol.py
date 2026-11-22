@@ -67,7 +67,10 @@ class TaskConfig:
 class TaskValues:
     src_unit: int
     task_index: int
-    values: list[float]
+    # The wire carries floats, but the coordinator sanitises non-finite
+    # readings (ESPEasy's NaN for an unread slot) to None before storing
+    # or dispatching: None means "no value", never 0.0.
+    values: list[float | None]
     src_ip: str = ""
 
 

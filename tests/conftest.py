@@ -12,6 +12,7 @@ loudly here, which is the right moment to notice.
 from __future__ import annotations
 
 import sys
+import threading
 import types
 from typing import Any
 
@@ -46,12 +47,36 @@ if "homeassistant" not in sys.modules:
         _listeners.setdefault(signal, []).append(target)
         return lambda: _listeners[signal].remove(target)
 
+    # Home Assistant 2026.11 rejects async_dispatcher_send from any thread
+    # other than the event loop. The stub mimics that check so the suite
+    # can pin the shim's contract: dispatching rides the event loop. The
+    # check is armed only while a test sets loop_thread -- by default the
+    # coreless suite has no loop, and everything runs on the main thread.
+    dispatcher.loop_thread = None
+
     def _send(hass: Any, signal: str, *args: Any) -> None:
+        if (
+            dispatcher.loop_thread is not None
+            and threading.get_ident() != dispatcher.loop_thread
+        ):
+            raise RuntimeError(
+                "async_dispatcher_send called from a thread other than "
+                "the event loop"
+            )
         for target in list(_listeners.get(signal, [])):
             target(*args)
 
+    def _send_threadsafe(hass: Any, signal: str, *args: Any) -> None:
+        """dispatcher_send: the thread-safe variant, like HA's own."""
+        loop = getattr(hass, "loop", None)
+        if loop is not None and hasattr(loop, "call_soon_threadsafe"):
+            loop.call_soon_threadsafe(_send, hass, signal, *args)
+        else:
+            _send(hass, signal, *args)
+
     dispatcher.async_dispatcher_connect = _connect
     dispatcher.async_dispatcher_send = _send
+    dispatcher.dispatcher_send = _send_threadsafe
     dispatcher.listeners = _listeners
 
     # The spatial adapter uses a periodic Home Assistant callback to refresh
@@ -130,14 +155,18 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _fresh_dispatcher():
-    """Every test gets an empty dispatcher.
+    """Every test gets an empty, disarmed dispatcher.
 
     Without this, providers registered by earlier tests stay connected and
     a later test counts their notifications too -- which looked like the
-    adapter telling the hub fifty times about one packet.
+    adapter telling the hub fifty times about one packet. The loop-thread
+    check is disarmed as well, so an armed check never leaks into the
+    next test when one of these fails.
     """
     from homeassistant.helpers import dispatcher
 
     dispatcher.listeners.clear()
+    dispatcher.loop_thread = None
     yield
     dispatcher.listeners.clear()
+    dispatcher.loop_thread = None

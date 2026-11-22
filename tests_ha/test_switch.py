@@ -184,6 +184,31 @@ async def test_ohne_wert_ist_der_schalter_unbekannt_nicht_aus(
     assert hass.states.get(entity_id).state == "unknown"
 
 
+async def test_nan_slot_ist_unbekannt_nicht_aus(integriert) -> None:
+    """Der Koordinator uebersetzt ESPEasys NaN in None ("kein Wert").
+    Ein Schalter an so einem Slot ist unbekannt -- NaN >= 0.5 waere
+    false und haette ihn als 'aus' ausgegeben."""
+    _online(integriert)
+    integriert.values[(5, 0)] = [None, 1.0, None, 0.0]
+    schalter = ESPEasyP2PSwitch(
+        coordinator=integriert,
+        entry_id="test-entry",
+        src_unit=5,
+        task_index=0,
+        value_index=0,
+    )
+    an_slot = ESPEasyP2PSwitch(
+        coordinator=integriert,
+        entry_id="test-entry",
+        src_unit=5,
+        task_index=0,
+        value_index=1,
+    )
+
+    assert schalter.is_on is None
+    assert an_slot.is_on is True
+
+
 async def test_0_5_und_darueber_gilt_an(integriert, hass: HomeAssistant) -> None:
     """Die Schwelle ist 0.5 -- PWM-Zwischenwerte flackern nicht."""
     _online(integriert)

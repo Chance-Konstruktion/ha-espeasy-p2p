@@ -61,3 +61,40 @@ def test_manifest_keeps_the_hub_integration_type() -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["integration_type"] == "hub"
     assert manifest["iot_class"] == "local_push"
+
+
+def test_async_notify_dispatches_only_thread_safe() -> None:
+    """HA 2026.11 rejects async_dispatcher_send from a foreign thread.
+
+    async_notify is reached from the event loop (freshness tick) *and*
+    from foreign threads: a dispatcher-connected listener runs wherever
+    the sender ran, and integrations hand async_notify to their own
+    machinery. The call site itself must therefore use dispatcher_send,
+    which schedules the send onto the loop from any context.
+    """
+    tree = ast.parse(
+        (INTEGRATION / "spatial_hub_provider.py").read_text(encoding="utf-8")
+    )
+    notifies = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "async_notify"
+    ]
+    assert notifies, "async_notify vanished from the shim"
+
+    offenders: list[str] = []
+    for function in notifies:
+        offenders.extend(
+            f"line {call.lineno}"
+            for call in ast.walk(function)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "async_dispatcher_send"
+        )
+    assert not offenders, (
+        "async_notify calls async_dispatcher_send directly; HA 2026.11 "
+        f"aborts that when the notify rides a foreign thread "
+        f"({', '.join(offenders)}). Use dispatcher_send, which schedules "
+        "the send onto the event loop from any thread"
+    )

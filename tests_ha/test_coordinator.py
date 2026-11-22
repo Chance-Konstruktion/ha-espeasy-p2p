@@ -244,12 +244,33 @@ async def test_registry_fehler_zerreisst_die_entdeckung_nicht(
 def test_nichtendliche_c013_werte_vergiften_den_zustand_nicht(
     hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
 ) -> None:
+    """Nichtendliche Werte sind fuer den Slot "kein Wert" (None), nicht 0
+    und kein Gift: die Slots, die wirklich messen, aktualisieren weiter."""
     koordinator.values[(5, 0)] = [21.5, 45.0, 1000.0, 0.0]
     koordinator.nodes[5] = knoten(5)
     updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
 
     koordinator._on_values(
         _werte(5, 0, [float("nan"), float("inf"), float("-inf"), 99.0])
+    )
+
+    assert koordinator.values[(5, 0)] == [None, None, None, 99.0]
+    assert len(updates) == 1
+    assert updates[0].values == [None, None, None, 99.0]
+    assert koordinator.is_unit_online(5)
+
+
+def test_c013_paket_ganz_ohne_gueltigen_wert_laesst_alles_stehen(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator
+) -> None:
+    """Nur Platzhalter (typisch: RPiEasy beim Hochfahren) -- der Herzschlag
+    zaehlt, aber die letzten gueltigen Werte werden nicht geleert."""
+    koordinator.values[(5, 0)] = [21.5, 45.0, 1000.0, 0.0]
+    koordinator.nodes[5] = knoten(5)
+    updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
+
+    koordinator._on_values(
+        _werte(5, 0, [float("nan"), float("nan"), float("nan"), float("nan")])
     )
 
     assert koordinator.values[(5, 0)] == [21.5, 45.0, 1000.0, 0.0]
@@ -493,7 +514,7 @@ async def test_json_lernt_namen_und_synchronisiert_werte(
     assert aufgabe.value_names == ["Temperature", "", "", ""]
     assert aufgabe.gpio_pin == 13
     assert aufgabe.plugin_type == "Environment - DS18b20"
-    assert koordinator.values[(5, 0)] == [21.5, 0.0, 0.0, 0.0]
+    assert koordinator.values[(5, 0)] == [21.5, 0.0, None, None]
     assert len(wert_signale) == 1
     assert koordinator._meta_inflight == set(), "In-Flight-Marke immer raeumen"
 
@@ -524,7 +545,8 @@ async def test_json_task_mit_ungueltiger_tasknummer_blockiert_nicht_die_restlich
     assert (5, 0) in koordinator.tasks
     assert koordinator.tasks[(5, 0)].task_name == "Valide"
     assert koordinator.tasks[(5, 0)].value_names == ["", "Temperature", "", ""]
-    assert koordinator.values[(5, 0)] == [0.0, 21.5, 0.0, 0.0]
+    # Kaputter Slot = "kein Wert" (None), nicht 0.0, das als Messung durchginge:
+    assert koordinator.values[(5, 0)] == [None, 21.5, None, None]
 
 
 async def test_veraltete_json_antwort_stellt_entfernten_knoten_nicht_wieder_her(
@@ -581,7 +603,7 @@ async def test_json_ohne_aenderung_feuert_kein_wertsignal(
     koordinator._meta_inflight.add(TEST_IP)
     await koordinator._fetch_node_metadata_safe(koordinator.nodes[5])
 
-    assert koordinator.values[(5, 1)] == [7.0, 0.0, 0.0, 0.0]
+    assert koordinator.values[(5, 1)] == [7.0, None, None, None]
     assert len(wert_signale) == 1, "gleiche Werte: keine Updates, kein Flackern"
 
 
@@ -606,6 +628,31 @@ async def test_json_nan_ueberschreibt_keinen_letzten_gueltigen_wert(
 
     assert koordinator.values[(5, 0)] == [21.5, 0.0, 0.0, 0.0]
     assert updates == []
+
+
+async def test_json_nan_wird_slotweise_zu_kein_wert(
+    hass: HomeAssistant, koordinator: ESPEasyP2PCoordinator, aioclient_mock
+) -> None:
+    """Ein Mischpaket ([NaN, 45.0, ...]): der NaN-Slot wird "kein Wert"
+    (None), die gueltigen Slots kommen durch -- statt dass das ganze
+    Paket wegfhaellt und die Messungen einfrieren."""
+    aioclient_mock.request(
+        "GET",
+        f"http://{TEST_IP}:80/json",
+        json=_sensors_nutzlast(
+            [{"TaskNumber": 1, "TaskName": "Klima",
+              "TaskValues": [{"Name": "Temperature", "Value": "NaN"},
+                             {"Name": "Humidity", "Value": 45.0}]}]
+        ),
+    )
+    koordinator.nodes[5] = knoten(5)
+    koordinator.values[(5, 0)] = [21.5, 0.0, 0.0, 0.0]
+    updates = signal_sammler(hass, koordinator, SIGNAL_VALUE_UPDATED)
+
+    await koordinator._fetch_node_metadata_safe(koordinator.nodes[5])
+
+    assert koordinator.values[(5, 0)] == [None, 45.0, None, None]
+    assert len(updates) == 1
 
 
 async def test_json_deaktivierte_aufgabe_wird_uebersprungen(

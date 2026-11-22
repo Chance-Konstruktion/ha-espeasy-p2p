@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -221,7 +223,13 @@ class ESPEasyP2PValueSensor(SensorEntity):
         values = self._coordinator.values.get((self._src_unit, self._task_index))
         if not values or self._value_index >= len(values):
             return None
-        return values[self._value_index]
+        value = values[self._value_index]
+        # Non-finite readings are "no value", never 0, and never reach
+        # Home Assistant's state machine: a sensor with state_class
+        # measurement refuses NaN/inf and aborts the whole write.
+        if value is None or not math.isfinite(value):
+            return None
+        return value
 
     @property
     def available(self) -> bool:

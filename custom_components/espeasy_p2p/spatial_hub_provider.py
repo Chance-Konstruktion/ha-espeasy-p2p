@@ -38,6 +38,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
+    dispatcher_send,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -420,5 +421,17 @@ class SpatialHubProvider:
 
     @callback
     def async_notify(self) -> None:
-        """Tell the hub the spatial data changed; it will re-fetch."""
-        async_dispatcher_send(self.hass, SIGNAL_DATA_UPDATED, self.provider_id)
+        """Tell the hub the spatial data changed; it will re-fetch.
+
+        This method is reached from both worlds: the event loop (the
+        freshness tick, the coordinator listener) and foreign threads --
+        a dispatcher-connected listener runs wherever the *sender* ran,
+        and integrations hand ``async_notify`` to their own machinery.
+        Since HA 2026.11, ``async_dispatcher_send`` is rejected from any
+        thread other than the event loop ("calls async_dispatcher_send
+        from a thread other than the event loop") and the hub then never
+        hears a thing. ``dispatcher_send`` is the thread-safe variant:
+        it schedules the send onto the loop, from whichever context the
+        notify came.
+        """
+        dispatcher_send(self.hass, SIGNAL_DATA_UPDATED, self.provider_id)
