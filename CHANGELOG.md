@@ -13,6 +13,13 @@ and the release date is obvious at a glance.
 - Sensor readings that are not finite (ESPEasy's NaN for an unwired slot, and infinities) are per-slot "no value" (`unknown` on the entity) instead of aborting the state write: the coordinator stores `None` for those slots and keeps the slots that did report, a malformed `/json` value no longer poses as `0.0`, and `native_value` guarantees HA never receives a non-finite state.
 
 ### Fixed
+- Switch toggles no longer fire multiple commands at the same node. The C013
+  Type-0 P2P send is now the last resort only: when the node's web endpoint
+  never answers, exactly one command (the first candidate) goes out over
+  UDP. Previously all candidate commands were sent unverified over P2P
+  before the HTTP attempt, so RPiEasy nodes (which execute Type-0) ran every
+  candidate plus the HTTP winner - pulse/timer commands fired several times
+  and the second-best candidate could work against the first (#2).
 - Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.
 - Invalid `TaskNumber` values in a node's `/json` response are skipped individually instead of aborting metadata processing for every later task.
 - The `set_gpio_pin` service now validates pin range and non-empty task names server-side, even when called outside the UI.
