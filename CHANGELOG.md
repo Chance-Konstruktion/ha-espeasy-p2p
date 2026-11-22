@@ -13,6 +13,11 @@ and the release date is obvious at a glance.
 - Sensor readings that are not finite (ESPEasy's NaN for an unwired slot, and infinities) are per-slot "no value" (`unknown` on the entity) instead of aborting the state write: the coordinator stores `None` for those slots and keeps the slots that did report, a malformed `/json` value no longer poses as `0.0`, and `native_value` guarantees HA never receives a non-finite state.
 
 ### Fixed
+- Config flow imports cleanly on Home Assistant 2024.1-2024.3, the minimum
+  version promised in hacs.json: `ConfigFlowResult` (2024.4+) now falls back
+  to `data_entry_flow.FlowResult` behind an ImportError guard, like the
+  sibling integrations do. Previously the unconditional import broke setup
+  on those versions (#3).
 - Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.
 - Invalid `TaskNumber` values in a node's `/json` response are skipped individually instead of aborting metadata processing for every later task.
 - The `set_gpio_pin` service now validates pin range and non-empty task names server-side, even when called outside the UI.
