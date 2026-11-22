@@ -86,7 +86,11 @@ _RULES: tuple[_Rule, ...] = (
     _Rule(
         SwitchPresentation(None, "mdi:radiator"),
         tokens=("heater", "radiator", "thermostat"),
-        stems=("heizung", "heating", "heiz"),
+        # "heiz" alone is 4 chars (breaks the rule above) and matches
+        # verbs like "heizen"/"aufheizen", which are not necessarily
+        # heaters. Noun stems only: "heizung" already covers compounds
+        # ("fussbodenheizung"); "heizkoerper" is its own noun.
+        stems=("heizung", "heating", "heizkoerper"),
     ),
     # Fans / ventilation.
     _Rule(
