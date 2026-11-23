@@ -319,7 +319,7 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
                     "known GPIO pin and the node rejected the task-name "
                     "command. Open the integration's options to set a pin or "
                     f"a custom command template (e.g. event,{task_name}="
-                    "{{state}})."
+                    "{state})."
                 )
             raise HomeAssistantError(
                 f"Node rejected the command for switch {task_name!r} on unit "
