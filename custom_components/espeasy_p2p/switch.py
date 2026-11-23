@@ -15,6 +15,7 @@ import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -310,24 +311,30 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
             success, last_cmd, last_status, last_body,
         )
         if not success:
-            if template:
-                _LOGGER.warning(
-                    "Switch %r on unit %d: custom command template %r "
-                    "was rejected by the node (last body: %r). Edit it in "
-                    "the integration's options.",
-                    task_name, self._src_unit, template, last_body,
-                )
-            elif gpio_pin is None:
-                _LOGGER.warning(
-                    "Switch %r on unit %d has no known GPIO pin and the "
-                    "node rejected the task-name command. Open the "
-                    "integration's options to set a pin or a custom "
-                    "command template (e.g. event,%s={state}).",
-                    task_name, self._src_unit, task_name,
-                )
             # Don't update local state — the relay didn't actually move.
-            self.async_write_ha_state()
-            return
+            # Signal the failure instead of only logging it: callers
+            # (automation, service, UI button) would otherwise see a
+            # successful call (Kleinigkeiten #4).
+            if template:
+                raise HomeAssistantError(
+                    f"Switch {task_name!r} on unit {self._src_unit}: custom "
+                    f"command template {template!r} was rejected by the node "
+                    f"(last body: {last_body!r}). Edit it in the integration's "
+                    "options."
+                )
+            if gpio_pin is None:
+                raise HomeAssistantError(
+                    f"Switch {task_name!r} on unit {self._src_unit} has no "
+                    "known GPIO pin and the node rejected the task-name "
+                    "command. Open the integration's options to set a pin or "
+                    f"a custom command template (e.g. event,{task_name}="
+                    "{state})."
+                )
+            raise HomeAssistantError(
+                f"Node rejected the command for switch {task_name!r} on unit "
+                f"{self._src_unit} (last command: {last_cmd!r}, "
+                f"HTTP {last_status}, body: {last_body!r})."
+            )
         values = list(self._coordinator.values.get((self._src_unit, self._task_index)) or [0.0, 0.0, 0.0, 0.0])
         while len(values) <= self._value_index:
             values.append(0.0)
@@ -356,6 +363,11 @@ def _looks_like_success(body: str) -> bool:
     RPiEasy answers an unknown task-name command with literal 'False'
     (HTTP 200), and 'Unknown command' for unknown verbs. A successful
     'gpio,N,X' returns either 'BCM<N> set to <X>' or a JSON log entry.
+
+    An HTML document is never a command acknowledgement — RPiEasy's
+    answers are plain text or JSON. This catches HTML error pages and
+    the login form of the node's web UI after an auth redirect, which
+    both arrive with HTTP 200 and would otherwise count as "switched".
     """
     b = body.strip().lower()
     if not b:
@@ -363,5 +375,9 @@ def _looks_like_success(body: str) -> bool:
     if b in ("false", "0"):
         return False
     if "unknown" in b:
+        return False
+    if "unauthorized" in b or "authentication" in b:
+        return False
+    if b.startswith(("<!doctype", "<html")) or "<body" in b:
         return False
     return True

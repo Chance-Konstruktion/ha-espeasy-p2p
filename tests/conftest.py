@@ -37,6 +37,16 @@ if "homeassistant" not in sys.modules:
     core.HomeAssistant = object
     core.callback = lambda func: func
 
+    components = _module("homeassistant.components")
+    switch_component = _module("homeassistant.components.switch")
+
+    class SwitchDeviceClass:
+        # Die echten HA-Member; coreless tests vergleichen nur Identitaet.
+        OUTLET = "outlet"
+        SWITCH = "switch"
+
+    switch_component.SwitchDeviceClass = SwitchDeviceClass
+
     _module("homeassistant.helpers")
 
     dispatcher = _module("homeassistant.helpers.dispatcher")

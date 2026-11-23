@@ -27,6 +27,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import mock_restore_cache
 
@@ -368,7 +369,7 @@ async def test_vorlage_mit_gross_platzhalter(
 
 
 async def test_gescheiterte_kandidaten_lassen_den_zustand_stehen(
-    integriert, hass: HomeAssistant, aioclient_mock, caplog
+    integriert, hass: HomeAssistant, aioclient_mock
 ) -> None:
     """Alle Kandidaten abgelehnt ('False' ist RPiEasys Nein): Der
     Schalter springt NICHT lokal -- sonst luegt die Oberflaeche."""
@@ -379,13 +380,15 @@ async def test_gescheiterte_kandidaten_lassen_den_zustand_stehen(
     aioclient_mock.request("GET", f"http://{TEST_IP}:80/control", text="False")
     aioclient_mock.request("GET", f"http://{TEST_IP}:80/control", text="False")
 
-    await hass.services.async_call(
-        SWITCH_DOMAIN, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
-    )
+    # Der Aufrufer (Automation, Dienst, Knopf) erfaehrt das Nein als
+    # Fehler statt eines scheinbar erfolgreichen Aufrufs (#4).
+    with pytest.raises(HomeAssistantError, match="no known GPIO pin"):
+        await hass.services.async_call(
+            SWITCH_DOMAIN, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        )
 
     assert (5, 0) not in integriert.values
     assert hass.states.get(entity_id).state == "unknown"
-    assert "no known GPIO pin" in caplog.text
 
 
 async def test_http_fehler_ist_auch_kein_erfolg(
@@ -397,9 +400,10 @@ async def test_http_fehler_ist_auch_kein_erfolg(
     entity_id = await _schalter_entity_id(hass, 5, 0, 0)
     aioclient_mock.request("GET", f"http://{TEST_IP}:80/control", exc=aiohttp.ClientError())
 
-    await hass.services.async_call(
-        SWITCH_DOMAIN, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            SWITCH_DOMAIN, "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        )
     assert (5, 0) not in integriert.values
 
 
@@ -526,9 +530,9 @@ def test_vorlagen_rendering_laesst_fremde_klammern_stehen():
 
 
 async def test_abgelehnter_vorlage_wird_ausdruecklich_gemeldet(
-    hass: HomeAssistant, entry, koordinator, aioclient_mock, caplog
+    hass: HomeAssistant, entry, koordinator, aioclient_mock
 ) -> None:
-    """Eigene Vorlage, Knoten sagt Nein: Die Warnung nennt die Vorlage
+    """Eigene Vorlage, Knoten sagt Nein: Der Fehler nennt die Vorlage
     und zeigt auf die Optionen -- das ist der Weg, wie der Nutzer erfährt,
     dass sein Kommando nicht ankam."""
     koordinator.nodes[5] = knoten(5)
@@ -541,10 +545,11 @@ async def test_abgelehnter_vorlage_wird_ausdruecklich_gemeldet(
     entitaet.hass = hass
     entitaet.entity_id = "switch.keller"
 
-    await entitaet._send_command(1)
+    with pytest.raises(HomeAssistantError) as fehler:
+        await entitaet._send_command(1)
 
-    assert "custom command template" in caplog.text
-    assert "event,keller={state}" in caplog.text
+    assert "custom command template" in str(fehler.value)
+    assert "event,keller={state}" in str(fehler.value)
     assert (5, 0) not in koordinator.values
 
 
