@@ -1,0 +1,11 @@
+# Abhaengigkeiten des einfachen pytest-Jobs (tests/, HA als Attrappe).
+# Die CI-Vorlage nimmt diese Datei statt ihrer festen Liste, sobald es
+# sie gibt -- deshalb steht deren Liste hier vollstaendig drin, dazu
+# aiohttp: tests/test_switch_command.py faehrt die echte Schalter-Klasse,
+# und switch.py importiert aiohttp (#2).
+pytest
+pytest-asyncio
+voluptuous
+pyyaml
+jsonschema
+aiohttp

@@ -294,7 +294,9 @@ async def test_mit_gelerntem_pin_geht_gpio_zuerst(
     assert aioclient_mock.call_count == 1
     assert _befehle(aioclient_mock) == ["gpio,13,1"]
     sockel: AufzeichnenderSockel = integriert._transport  # type: ignore[assignment]
-    assert sockel.gesendet, "der P2P-Begleiter ist mitgegangen"
+    # HTTP hat geantwortet: kein P2P-Nachschuss. Type-0 ist nur der
+    # letzte Rettungsanker, wenn der Knoten per HTTP gar nicht antwortet (#2).
+    assert sockel.gesendet == [], "HTTP hat geantwortet -- kein P2P"
     # Erfolg: der lokale Wert wird auf 1 gezogen -- der Schalter steht an,
     # BEVOR der Knoten das naechste Paket schickt.
     assert integriert.values[(5, 0)] == [1.0, 0.0, 0.0, 0.0]
