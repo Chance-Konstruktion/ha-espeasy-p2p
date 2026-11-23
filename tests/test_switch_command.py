@@ -22,6 +22,7 @@ import aiohttp
 # wird; espeasy_p2p_files teilt das Verzeichnis mit der Integration und
 # ueberspringt deren package __init__.
 from espeasy_p2p_files.switch import ESPEasyP2PSwitch
+from homeassistant.exceptions import HomeAssistantError
 
 UNIT = 5
 TASK = 2
@@ -143,7 +144,9 @@ class TestSchalterBefehl(IsolatedAsyncioTestCase):
         session = _FakeSession(lambda cmd: _FakeAntwort(200, "False"))
         entity = _entity(p2p, session)
 
-        await entity._send_command(1)
+        # Ohne Erfolg meldet der Schalter das Nein als Fehler (#4).
+        with self.assertRaises(HomeAssistantError):
+            await entity._send_command(1)
 
         self.assertEqual(KANDIDATEN, session.calls)
         self.assertEqual([], p2p.sent)
@@ -160,7 +163,10 @@ class TestSchalterBefehl(IsolatedAsyncioTestCase):
         session = _FakeSession(webserver_tot)
         entity = _entity(p2p, session)
 
-        await entity._send_command(1)
+        # UDP ist unbestaetigt: der Aufrufer erfaehrt trotzdem, dass kein
+        # Erfolg feststeht (#4) -- das eine P2P-Paket ist trotzdem raus.
+        with self.assertRaises(HomeAssistantError):
+            await entity._send_command(1)
 
         self.assertEqual(KANDIDATEN, session.calls)
         self.assertEqual([(NODE_IP, KANDIDATEN[0])], p2p.sent)

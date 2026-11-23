@@ -182,6 +182,14 @@ if "homeassistant" not in sys.modules:
     entity_platform = _module("homeassistant.helpers.entity_platform")
     entity_platform.AddEntitiesCallback = object
 
+    # switch.py meldet ein Nein des Knotens als HomeAssistantError (#4).
+    exceptions = _module("homeassistant.exceptions")
+
+    class HomeAssistantError(Exception):
+        pass
+
+    exceptions.HomeAssistantError = HomeAssistantError
+
     restore_state = _module("homeassistant.helpers.restore_state")
 
     class _RestoreEntity:
