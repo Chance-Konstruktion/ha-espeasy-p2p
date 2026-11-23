@@ -20,6 +20,11 @@ and the release date is obvious at a glance.
   before the HTTP attempt, so RPiEasy nodes (which execute Type-0) ran every
   candidate plus the HTTP winner - pulse/timer commands fired several times
   and the second-best candidate could work against the first (#2).
+- Config flow imports cleanly on Home Assistant 2024.1-2024.3, the minimum
+  version promised in hacs.json: `ConfigFlowResult` (2024.4+) now falls back
+  to `data_entry_flow.FlowResult` behind an ImportError guard, like the
+  sibling integrations do. Previously the unconditional import broke setup
+  on those versions (#3).
 - Coordinator shutdown now cancels and awaits node-discovery and switch-resync tasks; removing a node cancels its pending requests so delayed replies cannot restore removed state.
 - Invalid `TaskNumber` values in a node's `/json` response are skipped individually instead of aborting metadata processing for every later task.
 - The `set_gpio_pin` service now validates pin range and non-empty task names server-side, even when called outside the UI.

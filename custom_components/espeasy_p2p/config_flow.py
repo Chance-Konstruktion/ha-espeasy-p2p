@@ -6,13 +6,16 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import (
-    ConfigEntry,
-    ConfigFlow,
-    ConfigFlowResult,
-    OptionsFlow,
-)
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.core import callback
+
+# ConfigFlowResult exists since Home Assistant 2024.4; hacs.json promises
+# 2024.1.0, so fall back to the pre-2024.4 FlowResult name (same guard as
+# the sibling integrations, e.g. ha-powerline config_flow.py) (#3).
+try:
+    from homeassistant.config_entries import ConfigFlowResult
+except ImportError:
+    from homeassistant.data_entry_flow import FlowResult as ConfigFlowResult
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,

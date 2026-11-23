@@ -14,6 +14,7 @@ from __future__ import annotations
 import sys
 import threading
 import types
+from types import SimpleNamespace
 from typing import Any
 
 
@@ -178,6 +179,32 @@ if "homeassistant" not in sys.modules:
             return None
 
     restore_state.RestoreEntity = _RestoreEntity
+
+    # The config flow (tests/test_config_flow_import.py) builds its forms
+    # with the selector helpers.
+    selector = _module("homeassistant.helpers.selector")
+
+    class _Selector:
+        def __init__(self, config=None):
+            self.config = config
+
+    class _SelectorConfig(dict):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+
+    selector.BooleanSelector = _Selector
+    selector.NumberSelector = _Selector
+    selector.SelectSelector = _Selector
+    selector.TextSelector = _Selector
+    selector.SelectOptionDict = _SelectorConfig
+    selector.NumberSelectorConfig = _SelectorConfig
+    selector.SelectSelectorConfig = _SelectorConfig
+    selector.TextSelectorConfig = _SelectorConfig
+    selector.NumberSelectorMode = SimpleNamespace(BOX="box")
+    selector.SelectSelectorMode = SimpleNamespace(LIST="list")
+
+    data_entry_flow = _module("homeassistant.data_entry_flow")
+    data_entry_flow.FlowResult = dict
 
 
 # The integration's own package __init__ pulls in half of Home Assistant to
