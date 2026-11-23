@@ -271,14 +271,11 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
                 )
             candidates.append(f"{task_name},{state}")
 
-        # Fire-and-forget P2P (RPiEasy accepts type-0; stock ESPEasy ignores).
-        for cmd in candidates:
-            self._coordinator.send_p2p_command(node.ip, cmd)
-
         # HTTP /control: try each candidate and stop at the first success.
         url = f"http://{node.ip}:{node.web_port}/control"
         session = async_get_clientsession(self.hass)
         success = False
+        http_answered = False
         last_status: int | str = "n/a"
         last_body = ""
         last_cmd = ""
@@ -288,6 +285,7 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
                 async with session.get(
                     url, params={"cmd": cmd}, timeout=aiohttp.ClientTimeout(total=5)
                 ) as resp:
+                    http_answered = True
                     last_status = resp.status
                     last_body = (await resp.text())[:200]
                     if resp.status == 200 and _looks_like_success(last_body):
@@ -295,6 +293,17 @@ class ESPEasyP2PSwitch(SwitchEntity, RestoreEntity):
                         break
             except (aiohttp.ClientError, TimeoutError) as err:
                 last_status = f"error: {err}"
+
+        # C013 Type-0 is the last resort only. RPiEasy executes type-0 packets
+        # while stock ESPEasy ignores them, and UDP delivery is unverified --
+        # there is no ack to stop at. Firing every candidate over P2P before
+        # the HTTP attempt made RPiEasy nodes run all of them plus the HTTP
+        # winner again: pulse/timer commands fired several times and the
+        # second-best candidate worked against the first (#2). Only when the
+        # node's web endpoint never answered for any candidate does exactly
+        # one command -- the first, highest-priority one -- go out over P2P.
+        if not http_answered:
+            self._coordinator.send_p2p_command(node.ip, candidates[0])
         _LOGGER.info(
             "Switch unit=%d task=%r pin=%s state=%d -> success=%s last_cmd=%r http=%s body=%r",
             self._src_unit, task_name, gpio_pin, state,

@@ -140,6 +140,46 @@ if "homeassistant" not in sys.modules:
     entity_registry.registry = _entities
     entity_registry.Entry = _Entry
 
+    # The switch platform (tests/test_switch_command.py) drives the real
+    # entity class, so the bases it inherits from and the few helpers it
+    # imports need stubs too.
+    components = _module("homeassistant.components")
+
+    switch_component = _module("homeassistant.components.switch")
+
+    class _SwitchEntity:
+        def async_write_ha_state(self):
+            writes = getattr(self, "state_writes", 0)
+            self.state_writes = writes + 1
+
+    class SwitchDeviceClass:  # pragma: no cover - attribute namespace only
+        SWITCH = "switch"
+        OUTLET = "outlet"
+
+    switch_component.SwitchEntity = _SwitchEntity
+    switch_component.SwitchDeviceClass = SwitchDeviceClass
+    components.switch = switch_component
+
+    config_entries = _module("homeassistant.config_entries")
+    config_entries.ConfigEntry = object
+
+    aiohttp_client = _module("homeassistant.helpers.aiohttp_client")
+    aiohttp_client.async_get_clientsession = lambda hass: hass.clientsession
+
+    device_registry.DeviceInfo = dict
+    device_registry.format_mac = lambda mac: str(mac)
+
+    entity_platform = _module("homeassistant.helpers.entity_platform")
+    entity_platform.AddEntitiesCallback = object
+
+    restore_state = _module("homeassistant.helpers.restore_state")
+
+    class _RestoreEntity:
+        async def async_get_last_state(self):
+            return None
+
+    restore_state.RestoreEntity = _RestoreEntity
+
     # The config flow (tests/test_config_flow_import.py) builds its forms
     # with the selector helpers.
     selector = _module("homeassistant.helpers.selector")
