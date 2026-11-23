@@ -16,7 +16,7 @@ jobs:
           python-version: "3.13"
       # The conformance/protocol suite uses small Home Assistant stubs.
       - name: Install test dependencies
-        run: pip install pytest pytest-asyncio
+        run: pip install pytest pytest-asyncio voluptuous
       - name: Run unit tests
         run: python -m pytest -q
 
